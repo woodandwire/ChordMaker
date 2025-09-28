@@ -261,14 +261,14 @@ async def validate_chord_fingering(
     thumb_reach: int = Form(1)  # New parameter for thumb reach (default: 6th string only)
 ):
     """API endpoint to validate chord fingering with configurable thumb reach."""
-    # Create chord data from form inputs
+    # Create chord data from form inputs, sanitizing the data
     chord_data = [
-        (string_6_type, string_6_fret),
-        (string_5_type, string_5_fret),
-        (string_4_type, string_4_fret),
-        (string_3_type, string_3_fret),
-        (string_2_type, string_2_fret),
-        (string_1_type, string_1_fret),
+        (string_6_type, 0 if string_6_type in ['X', 'O'] else string_6_fret),
+        (string_5_type, 0 if string_5_type in ['X', 'O'] else string_5_fret),
+        (string_4_type, 0 if string_4_type in ['X', 'O'] else string_4_fret),
+        (string_3_type, 0 if string_3_type in ['X', 'O'] else string_3_fret),
+        (string_2_type, 0 if string_2_type in ['X', 'O'] else string_2_fret),
+        (string_1_type, 0 if string_1_type in ['X', 'O'] else string_1_fret),
     ]
     
     validator = ChordFingeringValidator(thumb_reach_strings=thumb_reach)
@@ -462,6 +462,12 @@ async def generate_form():
             .string-input select, .string-input input {
                 margin-left: 10px;
                 padding: 5px;
+            }
+            .string-input input:disabled {
+                background-color: #f8f9fa !important;
+                color: #6c757d !important;
+                cursor: not-allowed;
+                border: 1px solid #dee2e6;
             }
             .setting-input {
                 margin: 15px 0;
@@ -658,6 +664,54 @@ async def generate_form():
         </div>
         
         <script>
+        // Initialize fret input states when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add event listeners to all string type selectors
+            for (let i = 1; i <= 6; i++) {
+                const selector = document.querySelector(`select[name="string_${i}_type"]`);
+                const fretInput = document.querySelector(`input[name="string_${i}_fret"]`);
+                
+                // Set initial state
+                updateFretInput(selector, fretInput);
+                
+                // Add change listener
+                selector.addEventListener('change', function() {
+                    updateFretInput(selector, fretInput);
+                });
+            }
+        });
+
+        function updateFretInput(selector, fretInput) {
+            const selectedValue = selector.value;
+            
+            if (selectedValue === 'X') {
+                // Muted string - disable input and clear value
+                fretInput.disabled = true;
+                fretInput.value = '';
+                fretInput.placeholder = 'Muted';
+                fretInput.style.backgroundColor = '#f8f9fa';
+                fretInput.style.color = '#6c757d';
+            } else if (selectedValue === 'O') {
+                // Open string - disable input and set to 0
+                fretInput.disabled = true;
+                fretInput.value = '0';
+                fretInput.placeholder = 'Open (0)';
+                fretInput.style.backgroundColor = '#f8f9fa';
+                fretInput.style.color = '#6c757d';
+            } else {
+                // Finger or thumb - enable input
+                fretInput.disabled = false;
+                fretInput.placeholder = 'Fret';
+                fretInput.style.backgroundColor = '';
+                fretInput.style.color = '';
+                
+                // Set default fret if empty
+                if (!fretInput.value || fretInput.value === '0') {
+                    fretInput.value = '1';
+                }
+            }
+        }
+
         async function validateChord() {
             const form = document.querySelector('form');
             const formData = new FormData(form);
@@ -755,14 +809,14 @@ async def generate_chord(
     """Generate a custom chord chart from form data."""
     from chord_chart import ChordChart
     
-    # Create chord data from form inputs
+    # Create chord data from form inputs, sanitizing the data
     chord_data = [
-        (string_6_type, string_6_fret),
-        (string_5_type, string_5_fret),
-        (string_4_type, string_4_fret),
-        (string_3_type, string_3_fret),
-        (string_2_type, string_2_fret),
-        (string_1_type, string_1_fret),
+        (string_6_type, 0 if string_6_type in ['X', 'O'] else string_6_fret),
+        (string_5_type, 0 if string_5_type in ['X', 'O'] else string_5_fret),
+        (string_4_type, 0 if string_4_type in ['X', 'O'] else string_4_fret),
+        (string_3_type, 0 if string_3_type in ['X', 'O'] else string_3_fret),
+        (string_2_type, 0 if string_2_type in ['X', 'O'] else string_2_fret),
+        (string_1_type, 0 if string_1_type in ['X', 'O'] else string_1_fret),
     ]
     
     # Validate the chord first (using default thumb reach for generation)
