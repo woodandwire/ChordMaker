@@ -80,6 +80,7 @@ async def home():
             <img src="/svg/{chord["filename"]}" alt="{chord["display_name"]} Chord" width="220" height="230" style="border: 1px solid #ddd;">
             <br><small>Direct SVG: <a href="/svg/{chord["filename"]}" target="_blank">View</a> | 
             <a href="/chord/{chord["filename"]}" target="_blank">Page</a></small>
+            <br><button onclick="deleteChord('{chord["filename"]}')" class="delete-btn">🗑️ Delete</button>
         </div>
         '''
     
@@ -168,6 +169,19 @@ async def home():
             .generate-btn:hover {{
                 background-color: #218838;
             }}
+            .delete-btn {{
+                background-color: #dc3545;
+                color: white;
+                border: none;
+                padding: 5px 10px;
+                border-radius: 3px;
+                cursor: pointer;
+                font-size: 12px;
+                margin-top: 5px;
+            }}
+            .delete-btn:hover {{
+                background-color: #c82333;
+            }}
         </style>
     </head>
     <body>
@@ -188,6 +202,32 @@ async def home():
         </div>
         
         {chord_containers}
+        
+        <script>
+        async function deleteChord(chordName) {{
+            const displayName = chordName.replace(/_/g, ' ').replace(/sharp/g, '#').replace(/flat/g, 'b');
+            
+            if (!confirm(`Are you sure you want to delete the "${{displayName}}" chord? This cannot be undone.`)) {{
+                return;
+            }}
+            
+            try {{
+                const response = await fetch(`/api/chord/${{chordName}}`, {{
+                    method: 'DELETE'
+                }});
+                
+                if (response.ok) {{
+                    alert('Chord deleted successfully!');
+                    window.location.reload();
+                }} else {{
+                    const error = await response.text();
+                    alert('Failed to delete chord: ' + error);
+                }}
+            }} catch (error) {{
+                alert('Error deleting chord: ' + error.message);
+            }}
+        }}
+        </script>
     </body>
     </html>
     """
@@ -256,20 +296,135 @@ async def get_chord_svg(chord_name: str):
             "Content-Type": "image/svg+xml; charset=utf-8"
         }
     )
-    """Serve individual chord SVG files."""
+
+@app.get("/chord/{chord_name}", response_class=HTMLResponse)
+async def get_chord_page(chord_name: str):
+    """Serve an individual chord page with SVG and controls."""
     svg_file = current_dir / f"{chord_name}_chord.svg"
     
     if not svg_file.exists():
         raise HTTPException(status_code=404, detail=f"Chord {chord_name} not found")
     
-    return FileResponse(
-        svg_file, 
-        media_type="image/svg+xml",
-        headers={
-            "Cache-Control": "no-cache",
-            "Content-Type": "image/svg+xml; charset=utf-8"
-        }
-    )
+    # Convert filename back to display name
+    display_name = chord_name.replace("_", " ").replace("sharp", "#").replace("flat", "b")
+    display_name = display_name.title()
+    
+    html_content = f"""
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>{display_name} Chord</title>
+        <style>
+            body {{
+                font-family: Arial, sans-serif;
+                margin: 20px;
+                background-color: #f5f5f5;
+                max-width: 800px;
+                margin: 20px auto;
+            }}
+            .chord-container {{
+                background-color: white;
+                padding: 20px;
+                border-radius: 8px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                text-align: center;
+            }}
+            .controls {{
+                margin: 20px 0;
+            }}
+            .btn {{
+                padding: 10px 20px;
+                margin: 5px;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+                text-decoration: none;
+                display: inline-block;
+            }}
+            .btn-primary {{
+                background-color: #007bff;
+                color: white;
+            }}
+            .btn-primary:hover {{
+                background-color: #0056b3;
+            }}
+            .btn-danger {{
+                background-color: #dc3545;
+                color: white;
+            }}
+            .btn-danger:hover {{
+                background-color: #c82333;
+            }}
+            .btn-secondary {{
+                background-color: #6c757d;
+                color: white;
+            }}
+            .btn-secondary:hover {{
+                background-color: #545b62;
+            }}
+            svg {{
+                border: 1px solid #ddd;
+                border-radius: 5px;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="chord-container">
+            <h1>{display_name} Chord</h1>
+            <div>
+                <img src="/svg/{chord_name}" alt="{display_name} Chord" style="max-width: 100%; height: auto;">
+            </div>
+            <div class="controls">
+                <a href="/" class="btn btn-secondary">← Back to All Chords</a>
+                <a href="/svg/{chord_name}" target="_blank" class="btn btn-primary">Download SVG</a>
+                <button onclick="deleteChord('{chord_name}')" class="btn btn-danger">🗑️ Delete Chord</button>
+            </div>
+        </div>
+        
+        <script>
+        async function deleteChord(chordName) {{
+            if (!confirm('Are you sure you want to delete the ' + chordName.replace('_', ' ') + ' chord? This cannot be undone.')) {{
+                return;
+            }}
+            
+            try {{
+                const response = await fetch(`/api/chord/${{chordName}}`, {{
+                    method: 'DELETE'
+                }});
+                
+                if (response.ok) {{
+                    alert('Chord deleted successfully!');
+                    window.location.href = '/';
+                }} else {{
+                    const error = await response.text();
+                    alert('Failed to delete chord: ' + error);
+                }}
+            }} catch (error) {{
+                alert('Error deleting chord: ' + error.message);
+            }}
+        }}
+        </script>
+    </body>
+    </html>
+    """
+    
+    return html_content
+
+@app.delete("/api/chord/{chord_name}")
+async def delete_chord(chord_name: str):
+    """Delete a chord SVG file."""
+    svg_file = current_dir / f"{chord_name}_chord.svg"
+    
+    if not svg_file.exists():
+        raise HTTPException(status_code=404, detail=f"Chord {chord_name} not found")
+    
+    try:
+        svg_file.unlink()  # Delete the file
+        return {"message": f"Chord {chord_name} deleted successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete chord: {str(e)}")
 
 @app.get("/generate", response_class=HTMLResponse)
 async def generate_form():
