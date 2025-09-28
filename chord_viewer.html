@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chord Chart Viewer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .chord-container {
+            display: inline-block;
+            margin: 20px;
+            padding: 15px;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        h2 {
+            margin-top: 0;
+            color: #555;
+        }
+    </style>
+</head>
+<body>
+    <h1>Guitar Chord Charts</h1>
+    <p style="text-align: center; color: #666;">Generated using the Python ChordChart class</p>
+    
+    <div class="chord-container">
+        <h2>C Major</h2>
+        <object data="c_major_chord.svg" type="image/svg+xml" width="220" height="230">
+            Your browser does not support SVG
+        </object>
+    </div>
+    
+    <div class="chord-container">
+        <h2>G Major</h2>
+        <object data="g_major_chord.svg" type="image/svg+xml" width="220" height="230">
+            Your browser does not support SVG
+        </object>
+    </div>
+    
+    <div class="chord-container">
+        <h2>F Major</h2>
+        <object data="f_major_chord.svg" type="image/svg+xml" width="220" height="230">
+            Your browser does not support SVG
+        </object>
+    </div>
+</body>
+</html>

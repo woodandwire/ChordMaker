@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Chord Chart Example</title>
+    <style>
+        .chartContainer {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 300px;
+            width: 300px;
+            margin: 10px;
+            border: 1px solid #ccc;
+        }
+    </style>
+</head>
+<body>
+    <div id="gridContainer" style="display: flex; flex-wrap: wrap;"></div>
+    <script src="chordchartgenerator.js"></script>
+    <script>
+
+        let indicatorLabels = ['O', 'X', 0, 1, 2, 3, 4];
+        function getRandomNumber(min, max) {
+            return Math.floor(Math.random() * (max - min + 1)) + min;
+        }
+
+        window.addEventListener('DOMContentLoaded', function () {
+            const gridContainer = document.getElementById('gridContainer');
+
+            for (let row = 0; row < 1; row++) {
+                for (let col = 0; col < 1; col++) {
+                    const chordChart = new ChordChart();
+                    //chordChart.setTop(50);
+
+                    const data = [];
+                    for (let i = 0; i < 6; i++) {
+                      // map to array 
+                        const randomValue = indicatorLabels[getRandomNumber(0,4)];
+                        const randomFret = getRandomNumber(1, 4);
+                        data.push([randomValue, randomFret]);
+                    }
+
+                    const chartSvg = chordChart.createGridChart(data);
+
+                    const cell = document.createElement('div');
+                    cell.className = 'chartContainer';
+                    cell.innerHTML = chartSvg;
+
+                    gridContainer.appendChild(cell);
+                }
+            }
+        });
+    </script></body>
+</html>
