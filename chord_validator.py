@@ -287,6 +287,7 @@ class ChordFingeringValidator:
         self._rule_finger_collision_check()
         self._rule_thumb_position_check()
         self._rule_barre_consistency_check()
+        self._rule_barre_blocking_interference()
         self._rule_ergonomic_assessment()
     
     def _rule_basic_validation(self) -> None:
@@ -781,6 +782,101 @@ class ChordFingeringValidator:
                 rule_name=rule_name,
                 affected_strings=barre_strings
             ))
+    
+    def _rule_barre_blocking_interference(self) -> None:
+        """Check for barre chords that block access to other barre chords."""
+        rule_name = 'barre_blocking_interference'
+        
+        # Identify all barres (same finger on multiple strings at same fret)
+        finger_fret_map = {}
+        for pos in self.finger_positions:
+            if pos.finger.isdigit():  # Only check numbered fingers
+                key = (pos.finger, pos.fret)
+                if key not in finger_fret_map:
+                    finger_fret_map[key] = []
+                finger_fret_map[key].append(pos.string)
+        
+        # Find all barres (finger appears on multiple strings at same fret)
+        barres = []
+        for (finger, fret), strings in finger_fret_map.items():
+            if len(strings) > 1:  # This is a barre
+                barres.append({
+                    'finger': int(finger),
+                    'fret': fret,
+                    'strings': sorted(strings),
+                    'min_string': min(strings),
+                    'max_string': max(strings)
+                })
+        
+        # Check for barre blocking interference
+        for i, barre1 in enumerate(barres):
+            for j, barre2 in enumerate(barres):
+                if i != j:  # Don't compare barre with itself
+                    # The specific problem: higher-numbered finger at higher fret blocks lower-numbered finger at lower fret
+                    # This is ONLY a problem when it violates natural hand progression
+                    
+                    higher_finger = max(barre1['finger'], barre2['finger'])
+                    lower_finger = min(barre1['finger'], barre2['finger'])
+                    
+                    higher_barre = barre1 if barre1['finger'] == higher_finger else barre2
+                    lower_barre = barre2 if barre2['finger'] == lower_finger else barre1
+                    
+                    # Only flag as problematic if higher finger is at lower fret (reverse of natural progression)
+                    # OR if same finger number but different frets (impossible)
+                    if higher_barre['finger'] == lower_barre['finger'] and higher_barre['fret'] != lower_barre['fret']:
+                        # Same finger at different frets - impossible
+                        self.messages.append(ValidationMessage(
+                            code=ValidationResult.PHYSICALLY_IMPOSSIBLE,
+                            severity='error',
+                            message=f"Impossible: finger {higher_barre['finger']} cannot be at both fret {lower_barre['fret']} and fret {higher_barre['fret']}",
+                            rule_name=rule_name,
+                            affected_strings=higher_barre['strings'] + lower_barre['strings']
+                        ))
+                    elif (higher_barre['finger'] > lower_barre['finger'] and 
+                          higher_barre['fret'] < lower_barre['fret']):
+                        # Higher-numbered finger at lower fret than lower-numbered finger (reverse progression)
+                        self.messages.append(ValidationMessage(
+                            code=ValidationResult.PHYSICALLY_IMPOSSIBLE,
+                            severity='error',
+                            message=f"Anatomical violation: finger {higher_barre['finger']} at fret {higher_barre['fret']} cannot be behind finger {lower_barre['finger']} at fret {lower_barre['fret']}",
+                            rule_name=rule_name,
+                            affected_strings=higher_barre['strings'] + lower_barre['strings']
+                        ))
+                    elif (higher_barre['finger'] > lower_barre['finger'] and 
+                          higher_barre['fret'] > lower_barre['fret']):
+                        # This is the problematic case: higher finger at higher fret blocking lower finger
+                        # Check if there's actual physical interference
+                        fret_gap = higher_barre['fret'] - lower_barre['fret']
+                        finger_gap = higher_barre['finger'] - lower_barre['finger']
+                        
+                        # Check string positioning for blocking
+                        # The issue occurs when fingers need to cross over each other unnaturally
+                        string_overlap = (
+                            (higher_barre['min_string'] <= lower_barre['max_string']) and
+                            (higher_barre['max_string'] >= lower_barre['min_string'])
+                        )
+                        
+                        # Only flag as blocking if:
+                        # 1. Adjacent fingers (finger_gap = 1) with large fret gap (>= 3) AND string overlap
+                        # 2. OR finger tries to reach over/under another finger unnaturally
+                        if (finger_gap == 1 and fret_gap >= 3 and string_overlap):
+                            # Adjacent fingers with large gap and overlap = blocking
+                            self.messages.append(ValidationMessage(
+                                code=ValidationResult.PHYSICALLY_IMPOSSIBLE,
+                                severity='error',
+                                message=f"Barre blocking: adjacent fingers {lower_barre['finger']}-{higher_barre['finger']} with {fret_gap}-fret gap creates impossible hand position",
+                                rule_name=rule_name,
+                                affected_strings=higher_barre['strings'] + lower_barre['strings']
+                            ))
+                        elif (finger_gap <= 2 and fret_gap >= 4 and string_overlap):
+                            # Close fingers with very large gap = likely blocking
+                            self.messages.append(ValidationMessage(
+                                code=ValidationResult.PHYSICALLY_IMPOSSIBLE,
+                                severity='error',
+                                message=f"Barre blocking: fingers {lower_barre['finger']}-{higher_barre['finger']} span {fret_gap} frets with overlapping strings - hand cannot accommodate",
+                                rule_name=rule_name,
+                                affected_strings=higher_barre['strings'] + lower_barre['strings']
+                            ))
     
     def _calculate_finger_combination_difficulty(self) -> dict:
         """
