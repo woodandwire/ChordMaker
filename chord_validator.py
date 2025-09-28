@@ -418,6 +418,14 @@ class ChordFingeringValidator:
             if pos.finger.isdigit():
                 finger_positions_by_number[int(pos.finger)] = pos
         
+        # Define anatomical constraints for adjacent finger pairs
+        # These are based on human hand anatomy and guitar playing biomechanics
+        adjacent_finger_max_spans = {
+            (1, 2): 4,  # Index to middle: up to 4 frets
+            (2, 3): 3,  # Middle to ring: up to 3 frets  
+            (3, 4): 2,  # Ring to pinky: up to 2 frets (most restrictive)
+        }
+        
         # Check stretch between consecutive fingers
         for finger_num in range(1, 4):  # Check fingers 1-2, 2-3, 3-4
             if finger_num in finger_positions_by_number and finger_num + 1 in finger_positions_by_number:
@@ -427,22 +435,49 @@ class ChordFingeringValidator:
                 fret_distance = abs(pos2.fret - pos1.fret)
                 string_distance = abs(pos2.string - pos1.string)
                 
-                # Calculate difficulty based on fret and string distances
-                stretch_difficulty = fret_distance + (string_distance * 0.5)
+                # Get the maximum anatomical span for this finger pair
+                finger_pair = (finger_num, finger_num + 1)
+                max_span = adjacent_finger_max_spans.get(finger_pair, 3)  # Default to 3 frets
                 
-                if stretch_difficulty > 4:
+                # Check for anatomically impossible stretches between adjacent fingers
+                if fret_distance > max_span:
+                    # This is physically impossible for most human hands
                     self.messages.append(ValidationMessage(
-                        code=ValidationResult.EXCESSIVE_STRETCH,
+                        code=ValidationResult.PHYSICALLY_IMPOSSIBLE,
                         severity='error',
-                        message=f"Excessive stretch between finger {finger_num} (string {pos1.string}, fret {pos1.fret}) and finger {finger_num + 1} (string {pos2.string}, fret {pos2.fret})",
+                        message=f"Anatomically impossible: {fret_distance}-fret gap between adjacent fingers {finger_num}-{finger_num + 1} (max {max_span} frets)",
                         rule_name=rule_name,
                         affected_strings=[pos1.string, pos2.string]
                     ))
-                elif stretch_difficulty > 3:
+                elif fret_distance == max_span:
+                    # At the limit - possible but very difficult
+                    self.messages.append(ValidationMessage(
+                        code=ValidationResult.EXCESSIVE_STRETCH,
+                        severity='warning',
+                        message=f"Maximum stretch between adjacent fingers {finger_num}-{finger_num + 1}: {fret_distance} frets (at anatomical limit)",
+                        rule_name=rule_name,
+                        affected_strings=[pos1.string, pos2.string]
+                    ))
+                elif fret_distance >= max_span - 1:
+                    # Close to the limit - challenging
                     self.messages.append(ValidationMessage(
                         code=ValidationResult.EXCESSIVE_STRETCH,
                         severity='warning',
                         message=f"Challenging stretch between finger {finger_num} and finger {finger_num + 1}",
+                        rule_name=rule_name,
+                        affected_strings=[pos1.string, pos2.string]
+                    ))
+                
+                # Additional validation: Calculate overall difficulty including string distance
+                # Only apply this if we haven't already flagged an anatomical impossibility
+                stretch_difficulty = fret_distance + (string_distance * 0.5)
+                
+                if fret_distance <= max_span and stretch_difficulty > 4.5:
+                    # Only flag as excessive if it's within anatomical limits but has extreme string distance
+                    self.messages.append(ValidationMessage(
+                        code=ValidationResult.EXCESSIVE_STRETCH,
+                        severity='error',
+                        message=f"Excessive stretch between finger {finger_num} (string {pos1.string}, fret {pos1.fret}) and finger {finger_num + 1} (string {pos2.string}, fret {pos2.fret})",
                         rule_name=rule_name,
                         affected_strings=[pos1.string, pos2.string]
                     ))
