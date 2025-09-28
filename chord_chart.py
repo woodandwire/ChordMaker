@@ -232,7 +232,7 @@ class ChordChart:
         return open_strings
     
     def _get_fretted_notes_svg(self, data: List[Tuple[str, int]]) -> str:
-        """Generate SVG for fretted notes with finger positions."""
+        """Generate SVG for fretted notes with finger positions and barre connections."""
         fretted_notes = ''
         
         # Find all fretted notes (exclude open and muted strings)
@@ -259,44 +259,87 @@ class ChordChart:
             fret_offset = min_fret - 1  # Start display from min_fret
             fret_position_text = f"{min_fret}fr"
         
-        first_instance = True
+        # Detect barre chords - group by finger and fret
+        barre_groups = {}
+        fretted_note_positions = {}
         
         for index, data_point in enumerate(data):
-            if index >= len(self.strings):
-                break
+            if index >= len(self.strings) or data_point[0] in ['O', 'X'] or len(data_point) <= 1:
+                continue
                 
+            finger = data_point[0]
+            fret_number = data_point[1]
+            relative_fret = fret_number - fret_offset
             string_position = index * self.string_spacing
+            y_position = (relative_fret - 1) * self.fret_spacing + 78
             
-            if data_point[0] not in ['O', 'X'] and len(data_point) > 1:
-                fret_number = data_point[1]
-                # Calculate position relative to the fret window
-                relative_fret = fret_number - fret_offset
-                y_position = (relative_fret - 1) * self.fret_spacing + 78
+            # Store position data for each fretted note
+            fretted_note_positions[index] = {
+                'finger': finger,
+                'fret': fret_number,
+                'string_pos': string_position,
+                'y_pos': y_position,
+                'string_index': index
+            }
+            
+            # Group by finger and fret for barre detection
+            barre_key = (finger, fret_number)
+            if barre_key not in barre_groups:
+                barre_groups[barre_key] = []
+            barre_groups[barre_key].append({
+                'string_index': index,
+                'string_pos': string_position,
+                'y_pos': y_position
+            })
+        
+        # Draw barre lines first (behind the finger circles)
+        for (finger, fret), positions in barre_groups.items():
+            if len(positions) > 1:  # Only draw barre if finger covers multiple strings
+                # Sort positions by string index to find leftmost and rightmost
+                positions.sort(key=lambda p: p['string_index'])
+                leftmost = positions[0]
+                rightmost = positions[-1]
                 
-                # Add fret position indicator on the first fretted note (if not starting from 1st fret)
-                if first_instance and fret_position_text:
-                    first_instance = False
-                    fret_indicator_left = self.fretboard_left - 30
-                    fret_indicator_top = self.fretboard_top + 15  # Position at top of fretboard
-                    fretted_notes += (f'<text x="{fret_indicator_left}" '
-                                    f'y="{fret_indicator_top}" fill="black" font-family="Arial, sans-serif" font-size="12" font-weight="bold">{fret_position_text}</text>')
-                
-                # Determine the label for the fretted note
-                if data_point[0] == 'T':
-                    fret_label = 'T'
-                else:
-                    try:
-                        finger_num = int(data_point[0])
-                        fret_label = self.indicator_labels[finger_num + 2]
-                    except (ValueError, IndexError):
-                        fret_label = data_point[0]
-                
-                # Add the fretted note circle and label
-                fretted_notes += (f'<circle cx="{self.fretboard_left + string_position}" '
-                                f'cy="{y_position}" r="12" stroke="black" '
-                                f'stroke-width="1" fill="black" />')
-                fretted_notes += (f'<text x="{self.fretboard_left + string_position - 4}" '
-                                f'y="{y_position + 5}" fill="white" font-family="Arial, sans-serif" font-size="12" font-weight="bold">{fret_label}</text>')
+                # Draw barre line connecting the strings
+                barre_y = leftmost['y_pos']  # Same y position for all positions at this fret
+                fretted_notes += (f'<line x1="{self.fretboard_left + leftmost['string_pos']}" '
+                                f'y1="{barre_y}" '
+                                f'x2="{self.fretboard_left + rightmost['string_pos']}" '
+                                f'y2="{barre_y}" '
+                                f'style="stroke:rgb(0,0,0);stroke-width:8;stroke-linecap:round;"/>')
+        
+        # Draw individual finger circles and labels (on top of barre lines)
+        first_instance = True
+        
+        for index, position_data in fretted_note_positions.items():
+            # Add fret position indicator on the first fretted note (if not starting from 1st fret)
+            if first_instance and fret_position_text:
+                first_instance = False
+                fret_indicator_left = self.fretboard_left - 30
+                fret_indicator_top = self.fretboard_top + 15  # Position at top of fretboard
+                fretted_notes += (f'<text x="{fret_indicator_left}" '
+                                f'y="{fret_indicator_top}" fill="black" font-family="Arial, sans-serif" font-size="12" font-weight="bold">{fret_position_text}</text>')
+            
+            finger = position_data['finger']
+            string_position = position_data['string_pos']
+            y_position = position_data['y_pos']
+            
+            # Determine the label for the fretted note
+            if finger == 'T':
+                fret_label = 'T'
+            else:
+                try:
+                    finger_num = int(finger)
+                    fret_label = self.indicator_labels[finger_num + 2]
+                except (ValueError, IndexError):
+                    fret_label = finger
+            
+            # Add the fretted note circle and label
+            fretted_notes += (f'<circle cx="{self.fretboard_left + string_position}" '
+                            f'cy="{y_position}" r="12" stroke="black" '
+                            f'stroke-width="1" fill="black" />')
+            fretted_notes += (f'<text x="{self.fretboard_left + string_position - 4}" '
+                            f'y="{y_position + 5}" fill="white" font-family="Arial, sans-serif" font-size="12" font-weight="bold">{fret_label}</text>')
         
         return fretted_notes
     
