@@ -232,6 +232,31 @@ class ChordChart:
     def _get_fretted_notes_svg(self, data: List[Tuple[str, int]]) -> str:
         """Generate SVG for fretted notes with finger positions."""
         fretted_notes = ''
+        
+        # Find all fretted notes (exclude open and muted strings)
+        fretted_positions = []
+        for data_point in data:
+            if data_point[0] not in ['O', 'X'] and len(data_point) > 1:
+                fretted_positions.append(data_point[1])
+        
+        if not fretted_positions:
+            return fretted_notes
+        
+        # Calculate the fret position window
+        min_fret = min(fretted_positions)
+        max_fret = max(fretted_positions)
+        
+        # Determine the starting fret for display
+        # Only show fret position indicator if chord doesn't fit in standard 1-5 fret viewport
+        if max_fret <= 5:
+            # Chord fits in standard viewport (1st-5th frets) - no indicator needed
+            fret_offset = 0  # Show from 1st fret
+            fret_position_text = ""
+        else:
+            # Chord extends beyond 5th fret - show with fret position indicator
+            fret_offset = min_fret - 1  # Start display from min_fret
+            fret_position_text = f"{min_fret}fr"
+        
         first_instance = True
         
         for index, data_point in enumerate(data):
@@ -242,15 +267,17 @@ class ChordChart:
             
             if data_point[0] not in ['O', 'X'] and len(data_point) > 1:
                 fret_number = data_point[1]
-                y_position = (fret_number - 1) * self.fret_spacing + 78
+                # Calculate position relative to the fret window
+                relative_fret = fret_number - fret_offset
+                y_position = (relative_fret - 1) * self.fret_spacing + 78
                 
-                # Add fret number indicator on the first fretted note
-                if first_instance:
+                # Add fret position indicator on the first fretted note (if not starting from 1st fret)
+                if first_instance and fret_position_text:
                     first_instance = False
                     fret_indicator_left = self.fretboard_left - 30
-                    fret_indicator_top = y_position + 5
+                    fret_indicator_top = self.fretboard_top + 15  # Position at top of fretboard
                     fretted_notes += (f'<text x="{fret_indicator_left}" '
-                                    f'y="{fret_indicator_top}" fill="black" font-family="Arial, sans-serif" font-size="12">{fret_number}</text>')
+                                    f'y="{fret_indicator_top}" fill="black" font-family="Arial, sans-serif" font-size="12" font-weight="bold">{fret_position_text}</text>')
                 
                 # Determine the label for the fretted note
                 if data_point[0] == 'T':

@@ -124,6 +124,9 @@ class ChordFingeringValidator:
         """
         self.reset_validation()
         
+        # Store original chord data for reference
+        self.original_chord_data = chord_data
+        
         try:
             # Parse input data
             if not self._parse_chord_data(chord_data):
@@ -162,7 +165,9 @@ class ChordFingeringValidator:
         
         self.finger_positions = []
         
-        for string_num, (finger, fret) in enumerate(chord_data, 1):
+        for string_index, (finger, fret) in enumerate(chord_data):
+            # Convert array index to guitar string number (6th string = index 0, 1st string = index 5)
+            string_num = 6 - string_index
             
             # Skip muted and open strings
             if finger in ['X', 'O']:
@@ -503,19 +508,28 @@ class ChordFingeringValidator:
             adjacent_strings = [pos.string - 1, pos.string + 1]
             for adj_string in adjacent_strings:
                 if 1 <= adj_string <= 6:  # Valid string range
-                    # Check if this adjacent string should be open but might be muted
-                    is_adjacent_specified = any(
-                        fp.string == adj_string for fp in self.finger_positions
-                    )
+                    # Find what this adjacent string is supposed to be
+                    adj_string_config = None
+                    # Convert string number back to array index for lookup
+                    adj_string_index = 6 - adj_string  # String 6 = index 0, String 1 = index 5
+                    if 0 <= adj_string_index < len(self.original_chord_data):
+                        adj_string_config = self.original_chord_data[adj_string_index]
                     
-                    if not is_adjacent_specified and pos.fret > 0:
-                        self.messages.append(ValidationMessage(
-                            code=ValidationResult.FINGER_COLLISION,
-                            severity='info',
-                            message=f"Finger {pos.finger} on string {pos.string} might accidentally mute string {adj_string} - ensure finger arch",
-                            rule_name=rule_name,
-                            affected_strings=[pos.string, adj_string]
-                        ))
+                    # Only warn if the adjacent string should be open (not muted or fretted)
+                    if adj_string_config and adj_string_config[0] == 'O' and pos.fret > 0:
+                        # Check if this adjacent string has a finger on it
+                        is_adjacent_fretted = any(
+                            fp.string == adj_string for fp in self.finger_positions
+                        )
+                        
+                        if not is_adjacent_fretted:
+                            self.messages.append(ValidationMessage(
+                                code=ValidationResult.FINGER_COLLISION,
+                                severity='info',
+                                message=f"Finger {pos.finger} on string {pos.string} might accidentally mute string {adj_string} - ensure finger arch",
+                                rule_name=rule_name,
+                                affected_strings=[pos.string, adj_string]
+                            ))
     
     def _rule_thumb_position_check(self) -> None:
         """Validate thumb position and usage based on configured reach."""

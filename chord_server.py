@@ -185,20 +185,15 @@ async def home():
         </style>
     </head>
     <body>
-        <h1>🎸 Guitar Chord Charts</h1>
-        
-        <div class="info">
-            <p><strong>Generated using the Python ChordChart class</strong></p>
-            <p>Server running on FastAPI with uvicorn</p>
-        </div>
-        
+        <h1>Guitar Chord Charts</h1>
+               
         <div class="stats">
-            <strong>📊 Found {len(chord_files)} chord chart(s) in the application directory</strong>
+            <strong>Found {len(chord_files)} chord chart(s) in the application directory</strong>
         </div>
         
         <div class="nav">
             {nav_links}
-            <a href="/generate" class="generate-btn">➕ Generate New Chord</a>
+            <a href="/generate" class="generate-btn">Generate New Chord</a>
         </div>
         
         {chord_containers}
@@ -261,6 +256,7 @@ async def validate_chord_fingering(
     thumb_reach: int = Form(1)  # New parameter for thumb reach (default: 6th string only)
 ):
     """API endpoint to validate chord fingering with configurable thumb reach."""
+    
     # Create chord data from form inputs, sanitizing the data
     chord_data = [
         (string_6_type, 0 if string_6_type in ['X', 'O'] else string_6_fret),
@@ -435,7 +431,7 @@ async def generate_form():
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Generate Chord Chart</title>
+        <title>Chord Chart</title>
         <style>
             body {
                 font-family: Arial, sans-serif;
@@ -548,7 +544,7 @@ async def generate_form():
         </div>
         
         <div class="form-container">
-            <h1>Generate Custom Chord Chart</h1>
+            <h1>Generate Custom Chords Chart</h1>
             <form action="/generate" method="post">
                 <div>
                     <label for="chord_name">Chord Name:</label>
@@ -685,25 +681,28 @@ async def generate_form():
             const selectedValue = selector.value;
             
             if (selectedValue === 'X') {
-                // Muted string - disable input and clear value
-                fretInput.disabled = true;
-                fretInput.value = '';
+                // Muted string - make readonly and set to 0
+                fretInput.readOnly = true;
+                fretInput.value = '0';
                 fretInput.placeholder = 'Muted';
                 fretInput.style.backgroundColor = '#f8f9fa';
                 fretInput.style.color = '#6c757d';
+                fretInput.style.cursor = 'not-allowed';
             } else if (selectedValue === 'O') {
-                // Open string - disable input and set to 0
-                fretInput.disabled = true;
+                // Open string - make readonly and set to 0
+                fretInput.readOnly = true;
                 fretInput.value = '0';
                 fretInput.placeholder = 'Open (0)';
                 fretInput.style.backgroundColor = '#f8f9fa';
                 fretInput.style.color = '#6c757d';
+                fretInput.style.cursor = 'not-allowed';
             } else {
                 // Finger or thumb - enable input
-                fretInput.disabled = false;
+                fretInput.readOnly = false;
                 fretInput.placeholder = 'Fret';
                 fretInput.style.backgroundColor = '';
                 fretInput.style.color = '';
+                fretInput.style.cursor = '';
                 
                 // Set default fret if empty
                 if (!fretInput.value || fretInput.value === '0') {
