@@ -153,6 +153,7 @@ class PositionFinder:
         Assign fingers to fretted strings in a pattern.
         
         Works from string 6 to 1, assigning fingers (1, 2, 3, 4, T) to each fretted string.
+        Allows finger repetition to enable barre chords and other multi-string techniques.
         
         Args:
             base_pattern: Pattern with FRET placeholders
@@ -176,9 +177,11 @@ class PositionFinder:
         patterns = []
         
         # Generate all possible finger assignments for fretted positions
-        # Limit combinations to reasonable finger counts (max 4 fretted strings)
-        if len(fretted_positions) <= len(available_fingers):
-            for finger_combo in itertools.permutations(available_fingers, len(fretted_positions)):
+        # Use itertools.product to allow finger repetition (enables barre chords)
+        # Limit combinations to reasonable finger counts (max 4 fretted strings for performance)
+        if len(fretted_positions) <= 4:
+            # Use product instead of permutations to allow repeated fingers
+            for finger_combo in itertools.product(available_fingers, repeat=len(fretted_positions)):
                 pattern = base_pattern.copy()
                 
                 # Assign fingers to fretted positions
@@ -222,7 +225,6 @@ class PositionFinder:
         
         # Generate chord chart for ALL patterns (valid and invalid)
         self.chart.chord_name = pattern_name.replace('_', ' ').title()
-        svg_content = self.chart.create_grid_chart(pattern)
         
         if validation_result['is_valid']:
             # Valid chord - save to main output directory
@@ -232,12 +234,14 @@ class PositionFinder:
             status = validation_result.get('status_name', 'UNKNOWN')
             self.stats['complexity_breakdown'][status] = self.stats['complexity_breakdown'].get(status, 0) + 1
             
-            # Save chord chart to main directory
+            # Save chord chart to chords directory using save_to_file (includes chord data embedding)
             filename = f"{pattern_name}_chord.svg"
-            file_path = self.output_dir / filename
+            chords_dir = Path("chords")
+            chords_dir.mkdir(exist_ok=True)  # Ensure directory exists
+            file_path = chords_dir / filename
             
-            with open(file_path, 'w', encoding='utf-8') as f:
-                f.write(svg_content)
+            # Use save_to_file method to include chord data embedding
+            self.chart.save_to_file(pattern, str(file_path))
             
             result_info['file_created'] = True
             result_info['file_path'] = str(file_path)
@@ -250,33 +254,45 @@ class PositionFinder:
             
             status = validation_result.get('status_name', 'UNKNOWN')
             
-            # Save chord chart to trash directory (so we can see what's wrong)
-            svg_filename = f"{pattern_name}_invalid_chord.svg"
-            svg_path = self.trash_dir / svg_filename
+            # Generate SVG content for invalid chord
+            #svg_content = self.chart.create_grid_chart(pattern)
             
-            with open(svg_path, 'w', encoding='utf-8') as f:
-                f.write(svg_content)
+            # Save chord chart to trash directory (so we can see what's wrong)
+            #svg_filename = f"{pattern_name}_invalid_chord.svg"
+            #svg_path = self.trash_dir / svg_filename
+            
+            # For invalid chords, we'll embed chord data manually since save_to_file expects valid structure
+            #chord_data_comment = f"<!-- CHORD_DATA: {pattern} -->\n"
+            #lines = svg_content.split('\n')
+            #if lines[0].startswith('<?xml'):
+            #    lines.insert(1, chord_data_comment.strip())
+            #    svg_content = '\n'.join(lines)
+            #else:
+            #    svg_content = chord_data_comment + svg_content
+            
+            # with open(svg_path, 'w', encoding='utf-8') as f:
+            #    f.write(svg_content)
             
             # Create log entry for invalid chord
-            log_filename = f"{pattern_name}_invalid.txt"
-            log_path = self.trash_dir / log_filename
+            #log_filename = f"{pattern_name}_invalid.txt"
+            #log_path = self.trash_dir / log_filename
             
-            with open(log_path, 'w', encoding='utf-8') as f:
-                f.write(f"Invalid Chord Pattern: {pattern_name}\n")
-                f.write(f"Pattern: {pattern}\n")
-                f.write(f"Status: {status}\n")
-                f.write(f"Valid: {validation_result['is_valid']}\n")
-                f.write(f"Chart file: {svg_filename}\n\n")
+            #with open(log_path, 'w', encoding='utf-8') as f:
+            #    f.write(f"Invalid Chord Pattern: {pattern_name}\n")
+            #    f.write(f"Pattern: {pattern}\n")
+            #    f.write(f"Status: {status}\n")
+            #    f.write(f"Valid: {validation_result['is_valid']}\n")
+            #    f.write(f"Chart file: {svg_filename}\n\n")
                 
-                f.write("Validation Messages:\n")
-                for msg in validation_result.get('messages', []):
-                    f.write(f"  {msg['severity'].upper()}: {msg['message']}\n")
+            #    f.write("Validation Messages:\n")
+            #    for msg in validation_result.get('messages', []):
+            #        f.write(f"  {msg['severity'].upper()}: {msg['message']}\n")
             
-            result_info['file_created'] = True  # Chart was created, just in trash
-            result_info['file_path'] = str(svg_path)
-            result_info['log_path'] = str(log_path)
+            #result_info['file_created'] = True  # Chart was created, just in trash
+            #result_info['file_path'] = str(svg_path)
+            #result_info['log_path'] = str(log_path)
             
-            print(f"❌ Invalid: {pattern_name} - {status} - Chart & log saved to trash/")
+            # print(f"❌ Invalid: {pattern_name} - {status} - Chart & log saved to trash/")
         
         return result_info
     
@@ -343,11 +359,11 @@ def demonstrate_position_finder():
     # Create position finder
     finder = PositionFinder(
         instrument_config=guitar_config,
-        output_dir="chord_patterns_demo"
+        output_dir=""
     )
     
     # Generate and validate 10 patterns
-    results = finder.generate_and_validate_patterns(limit=10)
+    results = finder.generate_and_validate_patterns(limit=100000)
     
     print("\n🔍 Pattern Details:")
     print("-" * 40)

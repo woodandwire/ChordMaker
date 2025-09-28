@@ -5,6 +5,7 @@ This class creates SVG-based chord diagrams with configurable dimensions and sty
 
 from typing import List, Tuple, Union
 import math
+from chord_validator import ChordFingeringValidator
 
 
 class ChordChart:
@@ -183,6 +184,7 @@ class ChordChart:
     {self._get_strings_svg()}
     {self._get_open_strings_svg(data)}
     {self._get_fretted_notes_svg(data)}
+    {self._get_complexity_score_svg(data)}
 </svg>"""
         
         return template.strip()
@@ -298,6 +300,60 @@ class ChordChart:
         
         return fretted_notes
     
+    def _get_complexity_score_svg(self, data: List[Tuple[str, int]]) -> str:
+        """
+        Generate SVG for complexity score display in top right corner.
+        
+        Args:
+            data: Chord data for validation
+            
+        Returns:
+            SVG string for complexity score text
+        """
+        try:
+            # Validate the chord to get complexity information
+            validator = ChordFingeringValidator()
+            result = validator.validate_chord(data)
+            
+            # Extract difficulty score and level from validation messages
+            difficulty_score = 0.0
+            difficulty_level = "E"  # Default to Easy
+            
+            for msg in result.get('messages', []):
+                if 'difficulty' in msg.get('message', '').lower():
+                    message = msg['message']
+                    # Extract score from message like "Chord difficulty: Moderate (score: 2.5)"
+                    if 'score:' in message:
+                        try:
+                            score_part = message.split('score:')[1].split(')')[0].strip()
+                            difficulty_score = float(score_part)
+                        except (IndexError, ValueError):
+                            difficulty_score = 0.0
+                    
+                    # Extract difficulty level
+                    if 'Very Difficult' in message:
+                        difficulty_level = "VD"  # Use VD for Very Difficult
+                    elif 'Challenging' in message or 'Difficult' in message:
+                        difficulty_level = "D"
+                    elif 'Moderate' in message:
+                        difficulty_level = "M"  
+                    elif 'Easy' in message:
+                        difficulty_level = "E"
+                    break
+            
+            # Format the complexity display like "E2.5" or "M4.1"
+            complexity_text = f"{difficulty_level}{difficulty_score:.1f}"
+        
+            # Position in top right corner
+            text_x = self.fretboard_left + self.fretboard_width  # 10px from right edge
+            text_y = math.floor(self.top_gutter_height / 2)
+            
+            return f'<text x="{text_x}" y="{text_y}" fill="gray" font-family="Arial, sans-serif" font-size="10" text-anchor="end">{complexity_text}</text>'
+            
+        except Exception as e:
+            # If validation fails, return empty string to avoid breaking the chart
+            return ''
+    
     def save_to_file(self, data: List[Tuple[str, int]], filename: str) -> None:
         """
         Save the chord chart to an SVG file.
@@ -307,6 +363,17 @@ class ChordChart:
             filename: Output filename (should end with .svg)
         """
         svg_content = self.create_grid_chart(data)
+        
+        # Add chord data as a comment for debugging/copying purposes
+        chord_data_comment = f"<!-- CHORD_DATA: {data} -->\n"
+        
+        # Insert the comment after the XML declaration
+        lines = svg_content.split('\n')
+        if lines[0].startswith('<?xml'):
+            lines.insert(1, chord_data_comment.strip())
+            svg_content = '\n'.join(lines)
+        else:
+            svg_content = chord_data_comment + svg_content
         
         with open(filename, 'w', encoding='utf-8') as f:
             f.write(svg_content)

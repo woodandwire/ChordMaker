@@ -3,11 +3,13 @@ Simple FastAPI server to serve chord chart HTML and SVG files.
 Run with: uvicorn chord_server:app --reload
 """
 
-from fastapi import FastAPI, HTTPException, Form
+from fastapi import FastAPI, HTTPException, Form, Query
 from fastapi.responses import HTMLResponse, FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 import os
 import glob
+import re
+import math
 from pathlib import Path
 from chord_validator import ChordFingeringValidator
 
@@ -32,12 +34,119 @@ class SVGStaticFiles(StaticFiles):
 
 app.mount("/static", SVGStaticFiles(directory=current_dir), name="static")
 
+def extract_chord_data_from_svg(svg_file_path):
+    """Extract chord data from SVG file comment."""
+    try:
+        with open(svg_file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        # Look for CHORD_DATA comment
+        match = re.search(r'<!-- CHORD_DATA: (.+?) -->', content)
+        if match:
+            chord_data_str = match.group(1)
+            # Parse the chord data string back to a list
+            # This will handle the string representation of the list
+            chord_data = eval(chord_data_str)  # Safe here since we control the input
+            return chord_data
+        
+        return None
+    except Exception:
+        return None
+
+def format_chord_data_for_copy(chord_data, chord_name):
+    """Format chord data in a copy-friendly format for debugging."""
+    if not chord_data:
+        return "No chord data available"
+    
+    # Create a formatted string that's easy to copy and paste
+    formatted = f"""Chord: {chord_name}
+Data: {chord_data}
+
+String Layout (6th to 1st):
+"""
+    
+    string_names = ["6th (Low E)", "5th (A)", "4th (D)", "3rd (G)", "2nd (B)", "1st (High E)"]
+    for i, (string_type, fret) in enumerate(chord_data):
+        if string_type == 'X':
+            fret_desc = "Muted"
+        elif string_type == 'O':
+            fret_desc = "Open"
+        else:
+            fret_desc = f"Fret {fret}"
+        
+        formatted += f"{string_names[i]}: {string_type} ({fret_desc})\n"
+    
+    return formatted
+
+def generate_pagination_html(current_page, total_pages, per_page, total_chords, search=""):
+    """Generate HTML for pagination navigation."""
+    if total_pages <= 1:
+        return ""
+    
+    # Build query string for search
+    search_param = f"&search={search}" if search.strip() else ""
+    
+    html = f'''
+    <div class="pagination-info">
+        Showing page {current_page} of {total_pages} 
+        ({per_page} chords per page, {total_chords} total)
+    </div>
+    <div class="pagination">
+    '''
+    
+    # Previous button
+    if current_page > 1:
+        html += f'<a href="/?page={current_page - 1}&per_page={per_page}{search_param}" class="pagination-btn">« Previous</a>'
+    else:
+        html += '<span class="pagination-btn disabled">« Previous</span>'
+    
+    # Page numbers
+    start_page = max(1, current_page - 2)
+    end_page = min(total_pages, current_page + 2)
+    
+    if start_page > 1:
+        html += f'<a href="/?page=1&per_page={per_page}{search_param}" class="pagination-btn">1</a>'
+        if start_page > 2:
+            html += '<span class="pagination-ellipsis">...</span>'
+    
+    for page_num in range(start_page, end_page + 1):
+        if page_num == current_page:
+            html += f'<span class="pagination-btn active">{page_num}</span>'
+        else:
+            html += f'<a href="/?page={page_num}&per_page={per_page}{search_param}" class="pagination-btn">{page_num}</a>'
+    
+    if end_page < total_pages:
+        if end_page < total_pages - 1:
+            html += '<span class="pagination-ellipsis">...</span>'
+        html += f'<a href="/?page={total_pages}&per_page={per_page}{search_param}" class="pagination-btn">{total_pages}</a>'
+    
+    # Next button
+    if current_page < total_pages:
+        html += f'<a href="/?page={current_page + 1}&per_page={per_page}{search_param}" class="pagination-btn">Next »</a>'
+    else:
+        html += '<span class="pagination-btn disabled">Next »</span>'
+    
+    # Per-page selector
+    html += f'''
+    </div>
+    <div class="per-page-selector">
+        Show: 
+        <a href="/?page=1&per_page=12{search_param}" class="{'active' if per_page == 12 else ''}">12</a>
+        <a href="/?page=1&per_page=24{search_param}" class="{'active' if per_page == 24 else ''}">24</a>
+        <a href="/?page=1&per_page=48{search_param}" class="{'active' if per_page == 48 else ''}">48</a>
+        <a href="/?page=1&per_page=100{search_param}" class="{'active' if per_page == 100 else ''}">100</a>
+        per page
+    </div>
+    '''
+    
+    return html
+
 def discover_chord_files():
-    """Discover all chord SVG files in the application directory."""
+    """Discover all chord SVG files in the chords directory."""
     chord_files = []
     
-    # Look for files matching the pattern *_chord.svg
-    pattern = str(current_dir / "*_chord.svg")
+    # Look for files matching the pattern *_chord.svg in the chords directory
+    pattern = str(current_dir / "chords" / "*_chord.svg")
     svg_files = glob.glob(pattern)
     
     for svg_file in svg_files:
@@ -60,18 +169,48 @@ def discover_chord_files():
     return chord_files
 
 @app.get("/", response_class=HTMLResponse)
-async def home():
-    """Serve the main chord viewer page with dynamically discovered chords."""
+async def home(
+    page: int = Query(1, ge=1), 
+    per_page: int = Query(24, ge=1, le=100),
+    search: str = Query("", description="Search chord names")
+):
+    """Serve the main chord viewer page with pagination and search."""
     
     # Discover all chord files
-    chord_files = discover_chord_files()
+    all_chord_files = discover_chord_files()
     
-    # Generate navigation links
-    nav_links = ""
-    for chord in chord_files:
-        nav_links += f'<a href="/chord/{chord["filename"]}">{chord["display_name"]}</a>\n            '
+    # Apply search filter if provided
+    if search.strip():
+        search_term = search.lower().strip()
+        all_chord_files = [
+            chord for chord in all_chord_files 
+            if search_term in chord["display_name"].lower()
+        ]
     
-    # Generate chord containers
+    total_chords = len(all_chord_files)
+    
+    # Calculate pagination
+    total_pages = math.ceil(total_chords / per_page) if total_chords > 0 else 1
+    start_index = (page - 1) * per_page
+    end_index = start_index + per_page
+    
+    # Get chords for current page
+    chord_files = all_chord_files[start_index:end_index]
+    
+    # Generate pagination navigation
+    pagination_nav = generate_pagination_html(page, total_pages, per_page, total_chords, search)
+    
+    # Generate search info if search is active
+    search_info = ""
+    if search.strip():
+        search_info = f'''
+        <div class="search-info">
+            <strong>Search results for "{search}"</strong> - 
+            <a href="/">Clear search</a>
+        </div>
+        '''
+    
+    # Generate chord containers for current page
     chord_containers = ""
     for chord in chord_files:
         chord_containers += f'''
@@ -85,15 +224,15 @@ async def home():
         '''
     
     # Handle case where no chords are found
-    if not chord_files:
+    if not all_chord_files:
         chord_containers = '''
         <div class="chord-container" style="text-align: center; color: #666;">
             <h2>No Chord Charts Found</h2>
-            <p>No chord SVG files were found in the application directory.</p>
+            <p>No chord SVG files were found in the chords directory.</p>
             <p>Generate some chords using the form below or run the chord_chart.py script.</p>
         </div>
         '''
-        nav_links = '<span style="color: #666;">No chords available</span>'
+        pagination_nav = ""
     
     html_content = f"""
     <!DOCTYPE html>
@@ -182,21 +321,157 @@ async def home():
             .delete-btn:hover {{
                 background-color: #c82333;
             }}
+            .pagination {{
+                text-align: center;
+                margin: 20px 0;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                gap: 5px;
+                flex-wrap: wrap;
+            }}
+            .pagination-btn {{
+                display: inline-block;
+                padding: 8px 12px;
+                margin: 2px;
+                text-decoration: none;
+                border: 1px solid #ddd;
+                background-color: #f8f9fa;
+                color: #007bff;
+                border-radius: 4px;
+                min-width: 20px;
+                text-align: center;
+            }}
+            .pagination-btn:hover {{
+                background-color: #e9ecef;
+                text-decoration: none;
+            }}
+            .pagination-btn.active {{
+                background-color: #007bff;
+                color: white;
+                border-color: #007bff;
+            }}
+            .pagination-btn.disabled {{
+                background-color: #f8f9fa;
+                color: #6c757d;
+                border-color: #ddd;
+                cursor: not-allowed;
+            }}
+            .pagination-ellipsis {{
+                padding: 8px 4px;
+                color: #6c757d;
+            }}
+            .pagination-info {{
+                text-align: center;
+                margin: 10px 0;
+                color: #6c757d;
+                font-size: 14px;
+            }}
+            .per-page-selector {{
+                text-align: center;
+                margin: 15px 0;
+                font-size: 14px;
+                color: #6c757d;
+            }}
+            .per-page-selector a {{
+                margin: 0 5px;
+                padding: 4px 8px;
+                text-decoration: none;
+                color: #007bff;
+                border: 1px solid #ddd;
+                border-radius: 3px;
+                background-color: #f8f9fa;
+            }}
+            .per-page-selector a:hover {{
+                background-color: #e9ecef;
+            }}
+            .per-page-selector a.active {{
+                background-color: #007bff;
+                color: white;
+                border-color: #007bff;
+            }}
+            .search-container {{
+                text-align: center;
+                margin: 20px 0;
+                padding: 20px;
+                background-color: white;
+                border-radius: 8px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }}
+            .search-box {{
+                padding: 10px;
+                width: 300px;
+                max-width: 90%;
+                border: 2px solid #ddd;
+                border-radius: 5px;
+                font-size: 16px;
+                margin-right: 10px;
+            }}
+            .search-box:focus {{
+                border-color: #007bff;
+                outline: none;
+            }}
+            .search-btn {{
+                padding: 10px 20px;
+                background-color: #007bff;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+                font-size: 16px;
+            }}
+            .search-btn:hover {{
+                background-color: #0056b3;
+            }}
+            .search-info {{
+                background-color: #fff3cd;
+                color: #856404;
+                padding: 10px;
+                border-radius: 5px;
+                margin: 15px 0;
+                text-align: center;
+                border: 1px solid #ffeaa7;
+            }}
+            .search-info a {{
+                color: #007bff;
+                text-decoration: none;
+                margin-left: 10px;
+            }}
+            .search-info a:hover {{
+                text-decoration: underline;
+            }}
         </style>
     </head>
     <body>
         <h1>Guitar Chord Charts</h1>
+        
+        <div class="search-container">
+            <form method="get" style="display: inline-block;">
+                <input type="text" 
+                       name="search" 
+                       value="{search}" 
+                       placeholder="Search chords (e.g., 'major', 'pattern', 'Am')" 
+                       class="search-box">
+                <button type="submit" class="search-btn">🔍 Search</button>
+                <input type="hidden" name="per_page" value="{per_page}">
+            </form>
+        </div>
+        
+        {search_info}
                
         <div class="stats">
-            <strong>Found {len(chord_files)} chord chart(s) in the application directory</strong>
+            <strong>Found {total_chords} chord chart(s) in the chords directory</strong>
         </div>
         
         <div class="nav">
-            {nav_links}
             <a href="/generate" class="generate-btn">Generate New Chord</a>
         </div>
         
+        {pagination_nav}
+        
         {chord_containers}
+        
+        {pagination_nav}
         
         <script>
         async function deleteChord(chordName) {{
@@ -275,7 +550,7 @@ async def validate_chord_fingering(
 @app.get("/svg/{chord_name}")
 async def get_chord_svg(chord_name: str):
     """Serve SVG content directly with proper headers."""
-    svg_file = current_dir / f"{chord_name}_chord.svg"
+    svg_file = current_dir / "chords" / f"{chord_name}_chord.svg"
     
     if not svg_file.exists():
         raise HTTPException(status_code=404, detail=f"Chord {chord_name} not found")
@@ -296,7 +571,7 @@ async def get_chord_svg(chord_name: str):
 @app.get("/chord/{chord_name}", response_class=HTMLResponse)
 async def get_chord_page(chord_name: str):
     """Serve an individual chord page with SVG and controls."""
-    svg_file = current_dir / f"{chord_name}_chord.svg"
+    svg_file = current_dir / "chords" / f"{chord_name}_chord.svg"
     
     if not svg_file.exists():
         raise HTTPException(status_code=404, detail=f"Chord {chord_name} not found")
@@ -304,6 +579,10 @@ async def get_chord_page(chord_name: str):
     # Convert filename back to display name
     display_name = chord_name.replace("_", " ").replace("sharp", "#").replace("flat", "b")
     display_name = display_name.title()
+    
+    # Extract chord data for debugging/copying
+    chord_data = extract_chord_data_from_svg(svg_file)
+    chord_data_formatted = format_chord_data_for_copy(chord_data, display_name)
     
     html_content = f"""
     <!DOCTYPE html>
@@ -364,6 +643,40 @@ async def get_chord_page(chord_name: str):
                 border: 1px solid #ddd;
                 border-radius: 5px;
             }}
+            .chord-data {{
+                background-color: #f8f9fa;
+                border: 1px solid #dee2e6;
+                border-radius: 5px;
+                padding: 15px;
+                margin: 20px 0;
+                font-family: 'Courier New', monospace;
+                font-size: 14px;
+            }}
+            .chord-data h3 {{
+                margin-top: 0;
+                color: #495057;
+            }}
+            .chord-data pre {{
+                background-color: white;
+                padding: 10px;
+                border-radius: 3px;
+                border: 1px solid #e9ecef;
+                margin: 10px 0;
+                white-space: pre-wrap;
+                font-size: 12px;
+            }}
+            .copy-btn {{
+                background-color: #28a745;
+                color: white;
+                border: none;
+                padding: 8px 15px;
+                border-radius: 3px;
+                cursor: pointer;
+                font-size: 12px;
+            }}
+            .copy-btn:hover {{
+                background-color: #218838;
+            }}
         </style>
     </head>
     <body>
@@ -372,6 +685,13 @@ async def get_chord_page(chord_name: str):
             <div>
                 <img src="/svg/{chord_name}" alt="{display_name} Chord" style="max-width: 100%; height: auto;">
             </div>
+            
+            <div class="chord-data">
+                <p><small>Copy the text below to report chord selection logic errors:</small></p>
+                <pre id="chordData">{chord_data_formatted}</pre>
+                <button class="copy-btn" onclick="copyChordData()">📋 Copy to Clipboard</button>
+            </div>
+            
             <div class="controls">
                 <a href="/" class="btn btn-secondary">← Back to All Chords</a>
                 <a href="/svg/{chord_name}" target="_blank" class="btn btn-primary">Download SVG</a>
@@ -401,6 +721,36 @@ async def get_chord_page(chord_name: str):
                 alert('Error deleting chord: ' + error.message);
             }}
         }}
+        
+        function copyChordData() {{
+            const chordData = document.getElementById('chordData').textContent;
+            navigator.clipboard.writeText(chordData).then(function() {{
+                // Show temporary feedback
+                const btn = event.target;
+                const originalText = btn.textContent;
+                btn.textContent = '✅ Copied!';
+                btn.style.backgroundColor = '#28a745';
+                setTimeout(function() {{
+                    btn.textContent = originalText;
+                    btn.style.backgroundColor = '#28a745';
+                }}, 2000);
+            }}).catch(function(err) {{
+                // Fallback for older browsers
+                const textarea = document.createElement('textarea');
+                textarea.value = chordData;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+                
+                const btn = event.target;
+                const originalText = btn.textContent;
+                btn.textContent = '✅ Copied!';
+                setTimeout(function() {{
+                    btn.textContent = originalText;
+                }}, 2000);
+            }});
+        }}
         </script>
     </body>
     </html>
@@ -411,7 +761,7 @@ async def get_chord_page(chord_name: str):
 @app.delete("/api/chord/{chord_name}")
 async def delete_chord(chord_name: str):
     """Delete a chord SVG file."""
-    svg_file = current_dir / f"{chord_name}_chord.svg"
+    svg_file = current_dir / "chords" / f"{chord_name}_chord.svg"
     
     if not svg_file.exists():
         raise HTTPException(status_code=404, detail=f"Chord {chord_name} not found")
@@ -828,7 +1178,7 @@ async def generate_chord(
     
     # Create filename-safe name
     safe_name = chord_name.lower().replace(" ", "_").replace("#", "sharp").replace("b", "flat")
-    filename = f"{safe_name}_chord.svg"
+    filename = f"chords/{safe_name}_chord.svg"
     
     # Save the chord chart
     chart.save_to_file(chord_data, filename)

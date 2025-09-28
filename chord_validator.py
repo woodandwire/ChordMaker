@@ -331,27 +331,49 @@ class ChordFingeringValidator:
                     rule_name=rule_name
                 ))
         
-        # Check for impossible finger assignments (finger order)
-        finger_frets = {}
+        # Check for impossible finger assignments (anatomical finger order)
+        finger_data = {}
         for pos in self.finger_positions:
             if pos.finger.isdigit():  # Only check numbered fingers, not thumb
-                finger_frets[int(pos.finger)] = pos.fret
+                finger_data[int(pos.finger)] = {'fret': pos.fret, 'string': pos.string}
         
         # Sort fingers by number and check fret order makes anatomical sense
-        sorted_fingers = sorted(finger_frets.items())
+        sorted_fingers = sorted(finger_data.items())
         for i in range(len(sorted_fingers) - 1):
-            finger_num, fret = sorted_fingers[i]
-            next_finger_num, next_fret = sorted_fingers[i + 1]
+            finger_num, data = sorted_fingers[i]
+            next_finger_num, next_data = sorted_fingers[i + 1]
             
-            # Higher numbered fingers should generally be on higher or equal frets
-            # Allow some flexibility (1-2 fret difference) for chord shapes
-            if next_fret < fret - 2:
+            fret, string = data['fret'], data['string']
+            next_fret, next_string = next_data['fret'], next_data['string']
+            
+            # Higher numbered fingers CANNOT be on lower frets than lower numbered fingers
+            # This is a fundamental anatomical constraint
+            if next_fret < fret:
                 self.messages.append(ValidationMessage(
                     code=ValidationResult.PHYSICALLY_IMPOSSIBLE,
-                    severity='warning',
-                    message=f"Finger {next_finger_num} on fret {next_fret} is unusually far behind finger {finger_num} on fret {fret}",
+                    severity='error',
+                    message=f"Anatomically impossible: finger {next_finger_num} on fret {next_fret} cannot be behind finger {finger_num} on fret {fret}",
                     rule_name=rule_name
                 ))
+            # When fingers are on the same fret, check string position constraints
+            elif next_fret == fret:
+                # Higher numbered fingers must be on higher strings (lower string numbers) when on same fret
+                # This is because the hand naturally curves with higher fingers closer to the nut
+                if next_string > string:
+                    self.messages.append(ValidationMessage(
+                        code=ValidationResult.PHYSICALLY_IMPOSSIBLE,
+                        severity='error',
+                        message=f"Anatomically impossible: finger {next_finger_num} on string {next_string} cannot be lower than finger {finger_num} on string {string} when both on fret {fret}",
+                        rule_name=rule_name
+                    ))
+                # Even being equal frets can be problematic for non-adjacent fingers on same string
+                elif next_string == string and next_finger_num - finger_num > 1:
+                    self.messages.append(ValidationMessage(
+                        code=ValidationResult.PHYSICALLY_IMPOSSIBLE,
+                        severity='warning', 
+                        message=f"Difficult positioning: non-adjacent fingers {finger_num} and {next_finger_num} both on string {string} fret {fret} may cause crowding",
+                        rule_name=rule_name
+                    ))
         
         pass  # Additional rules placeholder
     
@@ -725,6 +747,180 @@ class ChordFingeringValidator:
                 affected_strings=barre_strings
             ))
     
+    def _calculate_finger_combination_difficulty(self) -> dict:
+        """
+        Calculate difficulty score based on anatomical finger combinations and stretches.
+        
+        Returns:
+            dict: {'score': float, 'factors': list} containing difficulty score and contributing factors
+        """
+        difficulty_score = 0.0
+        factors = []
+        
+        # Get numbered fingers only (excluding thumb for this analysis)
+        numbered_fingers = {}
+        for pos in self.finger_positions:
+            if pos.finger.isdigit():
+                numbered_fingers[int(pos.finger)] = pos
+        
+        # Define anatomical difficulty multipliers for finger combinations
+        # Based on natural hand anatomy: adjacent fingers (1-2, 2-3, 3-4) are easier than non-adjacent (1-3, 1-4, 2-4)
+        finger_combination_difficulty = {
+            # Adjacent finger pairs (easier)
+            (1, 2): 0.5,  # Index-middle (very easy)
+            (2, 3): 0.6,  # Middle-ring (easy) 
+            (3, 4): 0.8,  # Ring-pinky (slightly harder)
+            # Non-adjacent pairs (progressively harder)
+            (1, 3): 1.0,  # Index-ring (moderate)
+            (2, 4): 1.5,  # Middle-pinky (challenging)
+            (1, 4): 2.0,  # Index-pinky (hardest)
+        }
+        
+        # Check all finger pair combinations used in the chord
+        finger_numbers = sorted(numbered_fingers.keys())
+        for i in range(len(finger_numbers)):
+            for j in range(i + 1, len(finger_numbers)):
+                finger1, finger2 = finger_numbers[i], finger_numbers[j]
+                pos1, pos2 = numbered_fingers[finger1], numbered_fingers[finger2]
+                
+                # Base difficulty from finger combination type
+                combo_key = (finger1, finger2)
+                base_difficulty = finger_combination_difficulty.get(combo_key, 1.0)
+                
+                # Calculate fret span between the two fingers
+                fret_distance = abs(pos2.fret - pos1.fret)
+                
+                # String span between the two fingers  
+                string_distance = abs(pos2.string - pos1.string)
+                
+                # Calculate stretch difficulty
+                # Fret distance is the primary factor, string distance secondary
+                stretch_factor = 1.0
+                if fret_distance > 0:
+                    # Enhanced progressive difficulty for fret spans
+                    # Each additional fret requires exponentially more finger stretch
+                    if fret_distance == 1:
+                        stretch_factor = 1.0  # Easy - natural finger spacing
+                    elif fret_distance == 2:
+                        stretch_factor = 1.5  # Moderate - comfortable stretch
+                    elif fret_distance == 3:
+                        stretch_factor = 2.2  # Challenging - significant stretch required
+                    elif fret_distance == 4:
+                        stretch_factor = 3.2  # Hard - maximum comfortable reach for most
+                    elif fret_distance == 5:
+                        stretch_factor = 4.8  # Very hard - extreme stretch
+                    elif fret_distance == 6:
+                        stretch_factor = 7.0  # Extremely difficult - rare technique
+                    elif fret_distance == 7:
+                        stretch_factor = 10.5  # Nearly impossible for most players
+                    else:
+                        stretch_factor = 15.0  # Practically impossible
+                    
+                    # String distance modifiers - physics of finger positioning
+                    if string_distance > 3:
+                        # Very far strings allow easier stretching due to hand angle
+                        stretch_factor *= 0.7  
+                    elif string_distance > 2:
+                        # Moderately far strings make stretches slightly easier
+                        stretch_factor *= 0.85  
+                    elif string_distance == 0:  # Same string
+                        # Same string makes stretches significantly harder
+                        # Fingers must avoid interfering with each other
+                        stretch_factor *= 1.4
+                    elif string_distance == 1:  # Adjacent strings
+                        # Adjacent strings create finger interference
+                        stretch_factor *= 1.2
+                    
+                    # Fret position modifiers - lower frets are wider and harder to stretch
+                    if self.hand_position and self.hand_position.min_fret <= 3:
+                        # Lower frets have wider spacing, making stretches harder
+                        low_fret_penalty = 1.0 + (0.2 * (4 - self.hand_position.min_fret))
+                        stretch_factor *= low_fret_penalty
+                    elif self.hand_position and self.hand_position.min_fret >= 12:
+                        # Higher frets are narrower, making stretches slightly easier
+                        stretch_factor *= 0.9
+                else:
+                    # Same fret - much easier regardless of finger combination
+                    stretch_factor = 0.3
+                
+                # Calculate final difficulty for this finger pair
+                pair_difficulty = base_difficulty * stretch_factor
+                
+                # Special case: comfortable chord patterns
+                # Small fret spans with logical finger progression should be easier
+                if fret_distance <= 2 and pos1.fret <= pos2.fret:  # Logical progression
+                    # Adjacent fingers with small gaps are very comfortable
+                    if combo_key in [(1, 2), (2, 3), (3, 4)] and fret_distance <= 1:
+                        pair_difficulty *= 0.5  # Very comfortable patterns
+                    else:
+                        pair_difficulty *= 0.75  # Generally comfortable
+                
+                # Extra penalty for problematic combinations
+                if combo_key in [(1, 3), (1, 4), (2, 4)]:
+                    if fret_distance >= 3:
+                        # Non-adjacent fingers with significant gaps are exponentially harder
+                        gap_penalty = 1.3 + (fret_distance - 2) * 0.3
+                        pair_difficulty *= gap_penalty
+                    elif fret_distance == 0 and string_distance <= 1:
+                        # Non-adjacent fingers on same/adjacent strings at same fret is cramped
+                        pair_difficulty *= 1.8
+                
+                difficulty_score += pair_difficulty
+                
+                # Enhanced descriptive factors for different gap sizes
+                if pair_difficulty > 1.5:
+                    combo_desc = f"fingers {finger1}-{finger2}"
+                    
+                    # Describe the type of difficulty
+                    if fret_distance == 0:
+                        combo_desc += " (same fret positioning)"
+                    elif fret_distance == 1:
+                        combo_desc += " (1 fret gap)"
+                    elif fret_distance == 2:
+                        combo_desc += " (2 fret gap - moderate stretch)"
+                    elif fret_distance == 3:
+                        combo_desc += " (3 fret gap - significant stretch)"
+                    elif fret_distance == 4:
+                        combo_desc += f" ({fret_distance} fret gap - challenging stretch)"
+                    elif fret_distance >= 5:
+                        combo_desc += f" ({fret_distance} fret gap - extreme stretch)"
+                    
+                    # Add anatomical difficulty note
+                    if combo_key in [(1, 4)]:
+                        combo_desc += " (index-pinky: most difficult)"
+                    elif combo_key in [(2, 4)]:
+                        combo_desc += " (middle-pinky: very challenging)"
+                    elif combo_key in [(1, 3)]:
+                        combo_desc += " (index-ring: moderately challenging)"
+                        
+                    # String positioning notes for same-fret difficulties
+                    if fret_distance == 0 and string_distance <= 1:
+                        combo_desc += " - finger crowding"
+                    
+                    factors.append(combo_desc)
+        
+        # Additional penalty for three or more non-adjacent fingers with significant stretches
+        non_adjacent_stretch_penalty = 0
+        if len(finger_numbers) >= 3:
+            for i in range(len(finger_numbers)):
+                for j in range(i + 2, len(finger_numbers)):  # Skip adjacent
+                    finger1, finger2 = finger_numbers[i], finger_numbers[j]
+                    if finger2 - finger1 > 1:  # Non-adjacent
+                        pos1, pos2 = numbered_fingers[finger1], numbered_fingers[finger2]
+                        fret_distance = abs(pos2.fret - pos1.fret)
+                        # Only penalize if there's significant stretch
+                        if fret_distance > 2:
+                            non_adjacent_stretch_penalty += 0.5
+        
+        if non_adjacent_stretch_penalty > 0:
+            difficulty_score += non_adjacent_stretch_penalty
+            factors.append(f"multiple stretched non-adjacent combinations")
+        
+        return {
+            'score': difficulty_score,
+            'factors': factors
+        }
+    
     def _rule_ergonomic_assessment(self) -> None:
         """Assess overall ergonomics and playability."""
         rule_name = 'ergonomic_assessment'
@@ -750,11 +946,17 @@ class ChordFingeringValidator:
                 difficulty_score += 0.5
                 difficulty_factors.append("very high position")
         
-        # Count finger usage complexity
+        # Count finger usage complexity and anatomical difficulty
         finger_count = len(set(pos.finger for pos in self.finger_positions if pos.finger != 'T'))
         if finger_count >= 4:
             difficulty_score += 1.0
             difficulty_factors.append("uses all four fingers")
+        
+        # Advanced finger combination difficulty analysis
+        finger_difficulty_score = self._calculate_finger_combination_difficulty()
+        difficulty_score += finger_difficulty_score['score']
+        if finger_difficulty_score['factors']:
+            difficulty_factors.extend(finger_difficulty_score['factors'])
         
         # Check for thumb usage
         if any(pos.finger == 'T' for pos in self.finger_positions):
