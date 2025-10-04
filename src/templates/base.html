@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }}</title>
+    <link rel="stylesheet" href="/static/main.css">
+</head>
+<body>
+    <div class="nav">
+        <a href="/">🏠 Home</a>
+        <a href="/generate">➕ Generate Chord</a>
+        <a href="/api/chords" target="_blank">📊 API</a>
+    </div>
+    
+    {% block content %}{% endblock %}
+    
+    <script>
+        function deleteChord(chordName) {
+            if (confirm('Are you sure you want to delete the chord: ' + chordName + '?')) {
+                fetch('/api/chord/' + chordName, {
+                    method: 'DELETE'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        location.reload();
+                    } else {
+                        alert('Error deleting chord: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    alert('Error: ' + error);
+                });
+            }
+        }
+    </script>
+</body>
+</html>

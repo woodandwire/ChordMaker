@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>🎸 Chord Chart Viewer</h1>
+
+<div class="search-box">
+    <form method="get" style="display: inline-block;">
+        <input type="text" name="search" value="{{ search }}" placeholder="Search chord names..." class="search-input">
+        <input type="hidden" name="page" value="1">
+        <input type="hidden" name="per_page" value="{{ per_page }}">
+        <button type="submit" class="search-btn">🔍 Search</button>
+    </form>
+</div>
+
+{% if search_info %}
+    {{ search_info|safe }}
+{% endif %}
+
+<div class="stats">
+    📈 <strong>{{ total_chords }}</strong> chord charts available
+</div>
+
+{{ pagination_nav|safe }}
+
+<div class="chord-grid">
+    {% if chord_containers %}
+        {{ chord_containers|safe }}
+    {% else %}
+        <div class="chord-container" style="text-align: center; color: #666;">
+            <h2>No Chord Charts Found</h2>
+            <p>No chord SVG files were found in the chords directory.</p>
+            <p>Generate some chords using the form below or run the chord_chart.py script.</p>
+        </div>
+    {% endif %}
+</div>
+
+{{ pagination_nav|safe }}
+
+<div class="info">
+    <p>💡 <strong>Tip:</strong> Click on any chord image to view it in full size, or use the links to view the raw SVG files.</p>
+    <p>🔧 Use the <strong>Generate Chord</strong> button above to create new chord charts.</p>
+</div>
+{% endblock %}

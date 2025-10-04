@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>🎸 {{ chord_name }} Chord</h1>
+
+<div class="chord-container">
+    <h2>{{ chord_name }}</h2>
+    <img src="/svg/{{ filename }}" alt="{{ chord_name }} Chord" width="220" height="230" style="border: 1px solid #ddd;">
+    <br><small>Direct SVG: <a href="/svg/{{ filename }}" target="_blank">View</a></small>
+</div>
+
+{% if chord_data_display %}
+<div class="chord-data">
+    {{ chord_data_display }}
+</div>
+{% endif %}
+
+<div class="info">
+    <p>💡 This chord chart shows the finger positions needed to play {{ chord_name }}.</p>
+    <p>🔧 View the <a href="/svg/{{ filename }}" target="_blank">raw SVG file</a> or go back to the <a href="/">home page</a>.</p>
+</div>
+{% endblock %}

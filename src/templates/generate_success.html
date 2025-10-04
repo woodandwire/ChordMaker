@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="success">
+    <h2>✅ Chord Chart Generated Successfully!</h2>
+    <p>Your <strong>{{ chord_name }}</strong> chord chart has been created.</p>
+</div>
+
+{% if validation_message %}
+<div class="{{ validation_class }}" style="margin: 20px 0; padding: 15px; border-radius: 5px;">
+    <p>{{ validation_message|safe }}</p>
+</div>
+{% endif %}
+
+<div class="chord-container">
+    <h2>{{ chord_name }}</h2>
+    <img src="/svg/{{ safe_name }}" alt="{{ chord_name }} Chord" width="220" height="230" style="border: 1px solid #ddd;">
+    <br><small>Direct SVG: <a href="/svg/{{ safe_name }}" target="_blank">View</a></small>
+</div>
+
+<p><strong>File saved as:</strong> {{ filename }}</p>
+{% endblock %}

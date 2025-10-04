@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>🎸 Generate Chord Chart</h1>
+
+<div class="form-container">
+    <form method="post" action="/generate">
+        <div class="form-group">
+            <label for="chord_name">Chord Name:</label>
+            <input type="text" id="chord_name" name="chord_name" 
+                   placeholder="e.g., A, Dm, G7, Cmaj7, F#m" 
+                   value="{{ chord_name or '' }}" required>
+            <small style="color: #666; display: block; margin-top: 5px;">
+                Enter the chord name (e.g., C, Dm, G7, Am, F#)
+            </small>
+        </div>
+
+        <div class="form-group">
+            <label>Chord Pattern (String 6 to String 1):</label>
+            <small style="color: #666; display: block; margin-bottom: 10px;">
+                Enter fret numbers (0-24), 'X' for muted, or 'O' for open strings
+            </small>
+            <div class="chord-input-grid">
+                {% for i in range(6) %}
+                <div class="chord-input-cell">
+                    <label>String {{ 6 - i }}</label>
+                    <input type="text" name="string_{{ 6 - i }}" 
+                           placeholder="0-24/X/O" 
+                           value="{{ chord_pattern[i] if chord_pattern and i < chord_pattern|length else '' }}" 
+                           maxlength="3">
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <button type="submit" class="submit-btn">🎸 Generate Chord Chart</button>
+    </form>
+</div>
+
+<div class="info">
+    <h3>📝 How to use:</h3>
+    <ul style="text-align: left; max-width: 500px; margin: 0 auto;">
+        <li><strong>Chord Name:</strong> Enter any chord name (e.g., C, Dm, G7, Am)</li>
+        <li><strong>String Pattern:</strong> Specify fret positions for each string</li>
+        <li><strong>Fret Numbers:</strong> Use 0-24 for fretted notes</li>
+        <li><strong>Open Strings:</strong> Use 'O' for open strings (no finger)</li>
+        <li><strong>Muted Strings:</strong> Use 'X' for muted/unplayed strings</li>
+    </ul>
+</div>
+
+<div class="info">
+    <h3>🎯 Example Patterns:</h3>
+    <ul style="text-align: left; max-width: 500px; margin: 0 auto;">
+        <li><strong>C Major:</strong> X-3-2-0-1-0 (X, 3, 2, 0, 1, 0)</li>
+        <li><strong>G Major:</strong> 3-2-0-0-3-3 (3, 2, 0, 0, 3, 3)</li>
+        <li><strong>D Major:</strong> X-X-0-2-3-2 (X, X, 0, 2, 3, 2)</li>
+        <li><strong>A Minor:</strong> X-0-2-2-1-0 (X, 0, 2, 2, 1, 0)</li>
+    </ul>
+</div>
+{% endblock %}
