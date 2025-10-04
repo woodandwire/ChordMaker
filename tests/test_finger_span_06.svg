@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- CHORD_DATA: [('1', 2), ('2', 7), ('X', 0), ('X', 0), ('X', 0), ('X', 0)] -->
+<svg width="220" height="230" 
+     xmlns="http://www.w3.org/2000/svg" 
+     xmlns:xlink="http://www.w3.org/1999/xlink"
+     viewBox="0 0 220 230">
+    <title>Test 6 Guitar Chord</title>
+    <desc>Guitar chord diagram for Test 6</desc>
+    <text x="50" y="25" fill="black" font-family="Arial, sans-serif" font-size="16" font-weight="bold">Test 6</text>
+    <rect y="51" x="50" width="150" height="10" style="fill:rgb(0,0,0);stroke-width:1;stroke:rgb(0,0,0);"/>
+    <rect x="50" y="62" width="150" height="150" style="fill:rgb(255,255,255);stroke-width:1;stroke:rgb(0,0,0);"/>
+    <line x1="50" y1="92" x2="200" y2="92" style="stroke:rgb(0,0,0);stroke-width:1;"/><line x1="50" y1="122" x2="200" y2="122" style="stroke:rgb(0,0,0);stroke-width:1;"/><line x1="50" y1="152" x2="200" y2="152" style="stroke:rgb(0,0,0);stroke-width:1;"/><line x1="50" y1="182" x2="200" y2="182" style="stroke:rgb(0,0,0);stroke-width:1;"/><line x1="50" y1="212" x2="200" y2="212" style="stroke:rgb(0,0,0);stroke-width:1;"/>
+    <line x1="50" y1="62" x2="50" y2="212" style="stroke:rgb(0,0,0);stroke-width:1;"/><line x1="80" y1="62" x2="80" y2="212" style="stroke:rgb(0,0,0);stroke-width:1;"/><line x1="110" y1="62" x2="110" y2="212" style="stroke:rgb(0,0,0);stroke-width:1;"/><line x1="140" y1="62" x2="140" y2="212" style="stroke:rgb(0,0,0);stroke-width:1;"/><line x1="170" y1="62" x2="170" y2="212" style="stroke:rgb(0,0,0);stroke-width:1;"/><line x1="200" y1="62" x2="200" y2="212" style="stroke:rgb(0,0,0);stroke-width:1;"/>
+    <text x="105" y="46" fill="black" font-family="Arial, sans-serif" font-size="14" font-weight="bold">X</text><text x="135" y="46" fill="black" font-family="Arial, sans-serif" font-size="14" font-weight="bold">X</text><text x="165" y="46" fill="black" font-family="Arial, sans-serif" font-size="14" font-weight="bold">X</text><text x="195" y="46" fill="black" font-family="Arial, sans-serif" font-size="14" font-weight="bold">X</text>
+    <text x="20" y="77" fill="black" font-family="Arial, sans-serif" font-size="12" font-weight="bold">2fr</text><circle cx="50" cy="78" r="12" stroke="black" stroke-width="1" fill="black" /><text x="46" y="83" fill="white" font-family="Arial, sans-serif" font-size="12" font-weight="bold">1</text><circle cx="80" cy="228" r="12" stroke="black" stroke-width="1" fill="black" /><text x="76" y="233" fill="white" font-family="Arial, sans-serif" font-size="12" font-weight="bold">2</text>
+    <text x="200" y="25" fill="gray" font-family="Arial, sans-serif" font-size="10" text-anchor="end">VD6.5</text>
+</svg>

@@ -363,7 +363,7 @@ def demonstrate_position_finder():
     )
     
     # Generate and validate 10 patterns
-    results = finder.generate_and_validate_patterns(limit=100000)
+    results = finder.generate_and_validate_patterns(limit=1000000)
     
     print("\n🔍 Pattern Details:")
     print("-" * 40)

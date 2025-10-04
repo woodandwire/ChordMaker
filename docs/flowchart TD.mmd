@@ -1,0 +1,142 @@
+flowchart TD
+    A[Start: validate_chord] --> B{Parse Input Data}
+    
+    B -->|Valid| C[Calculate Hand Position]
+    B -->|Invalid| Z1[Return INVALID_INPUT]
+    
+    C --> D[Run Validation Rules]
+    
+    D --> E1[Basic Validation]
+    D --> E2[Fret Span Check]  
+    D --> E3[Finger Stretch Check]
+    D --> E4[Finger Collision Check]
+    D --> E5[Thumb Position Check]
+    D --> E6[Barre Consistency Check]
+    D --> E7[Barre Blocking Interference]
+    D --> E8[Ergonomic Assessment]
+    
+    E1 --> F1{Fingers on Fret 0?}
+    F1 -->|Yes| G1[Add PHYSICALLY_IMPOSSIBLE Error]
+    F1 -->|No| F2{Too Many Fingers?}
+    F2 -->|Yes| G2[Add TOO_MANY_FINGERS Error]
+    F2 -->|No| F3{Same Finger, Different Frets?}
+    F3 -->|Yes| G3[Add PHYSICALLY_IMPOSSIBLE Error]
+    F3 -->|No| F4{Higher Finger Behind Lower?}
+    F4 -->|Yes| G4[Add PHYSICALLY_IMPOSSIBLE Error]
+    F4 -->|No| H1[Basic Validation Complete]
+    
+    E2 --> F5{Fret Span > Max?}
+    F5 -->|Yes| G5[Add EXCESSIVE_STRETCH Warning/Error]
+    F5 -->|No| H2[Fret Span Check Complete]
+    
+    E3 --> F6{Adjacent Finger Gaps}
+    F6 --> F7{Gap > Anatomical Limit?}
+    F7 -->|Ring-Pinky > 2| G6[Add PHYSICALLY_IMPOSSIBLE Error]
+    F7 -->|Middle-Ring > 3| G6
+    F7 -->|Index-Middle > 4| G6
+    F7 -->|At Limit| G7[Add EXCESSIVE_STRETCH Warning]
+    F7 -->|Within Limits| H3[Finger Stretch Check Complete]
+    
+    E4 --> F8{Same Fret, Same String?}
+    F8 -->|Yes| G8[Add FINGER_COLLISION Error]
+    F8 -->|No| F9{Adjacent Strings, Same Fret?}
+    F9 -->|Conflict| G9[Add FINGER_COLLISION Warning]
+    F9 -->|No Conflict| H4[Finger Collision Check Complete]
+    
+    E5 --> F10{Thumb Present?}
+    F10 -->|No| H5[Thumb Position Check Complete]
+    F10 -->|Yes| F11{Thumb on Allowed Strings?}
+    F11 -->|No| G10[Add THUMB_POSITION_ERROR Error]
+    F11 -->|Yes| F12{Thumb Fret > Max?}
+    F12 -->|Yes| G11[Add THUMB_POSITION_ERROR Warning]
+    F12 -->|No| H5
+    
+    E6 --> F13{Identify Barres}
+    F13 --> F14{Valid Barre Pattern?}
+    F14 -->|Invalid Gaps| G12[Add INCONSISTENT_BARRE Error]
+    F14 -->|Full Barre Low Fret| G13[Add INCONSISTENT_BARRE Warning]
+    F14 -->|Finger Behind Barre| G14[Add INCONSISTENT_BARRE Warning]
+    F14 -->|Valid| H6[Barre Consistency Check Complete]
+    
+    E7 --> F15{Multiple Barres Present?}
+    F15 -->|No| H7[Barre Blocking Check Complete]
+    F15 -->|Yes| F16{Check Barre Pairs}
+    F16 --> F17{Higher Finger Blocks Lower?}
+    F17 -->|Adjacent Fingers, 3+ Fret Gap| G15[Add PHYSICALLY_IMPOSSIBLE Error]
+    F17 -->|Close Fingers, 4+ Fret Gap| G15
+    F17 -->|Same Finger, Different Frets| G16[Add PHYSICALLY_IMPOSSIBLE Error]
+    F17 -->|No Blocking| H7
+    
+    E8 --> F18[Calculate Difficulty Score]
+    F18 --> F19{Difficulty Level}
+    F19 -->|Easy| G17[Add Difficulty INFO]
+    F19 -->|Moderate| G18[Add Difficulty WARNING]
+    F19 -->|Challenging/Difficult| G19[Add Difficulty WARNING]
+    F19 -->|Very Difficult| G20[Add Difficulty WARNING]
+    F19 --> H8[Ergonomic Assessment Complete]
+    
+    %% Collect all validation results
+    H1 --> I[Determine Overall Result]
+    H2 --> I
+    H3 --> I  
+    H4 --> I
+    H5 --> I
+    H6 --> I
+    H7 --> I
+    H8 --> I
+    
+    G1 --> I
+    G2 --> I
+    G3 --> I
+    G4 --> I
+    G5 --> I
+    G6 --> I
+    G7 --> I
+    G8 --> I
+    G9 --> I
+    G10 --> I
+    G11 --> I
+    G12 --> I
+    G13 --> I
+    G14 --> I
+    G15 --> I
+    G16 --> I
+    G17 --> I
+    G18 --> I
+    G19 --> I
+    G20 --> I
+    
+    I --> J{Has Errors?}
+    J -->|Yes| K[Set Result to First Error Code]
+    J -->|No| L{Has Warnings?}
+    L -->|Yes| M[Set Result to VALID_WITH_WARNINGS]
+    L -->|No| N[Set Result to VALID]
+    
+    K --> O[Build Final Result]
+    M --> O
+    N --> O
+    
+    O --> P[Return Result Dictionary]
+    P --> Q[End]
+    
+    Z1 --> Q
+    
+    %% Error handling
+    D -->|Exception| Z2[Add VALIDATION_ENGINE_ERROR]
+    Z2 --> Z3[Return VALIDATION_ENGINE_ERROR]
+    Z3 --> Q
+    
+    %% Styling
+    classDef startEnd fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    classDef process fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    classDef decision fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    classDef error fill:#ffebee,stroke:#c62828,stroke-width:2px
+    classDef warning fill:#fff8e1,stroke:#ff6f00,stroke-width:2px
+    classDef success fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px
+    
+    class A,Q startEnd
+    class C,D,F18,I,O,P process
+    class B,F1,F2,F3,F4,F5,F7,F8,F9,F10,F11,F12,F14,F15,F16,F17,F19,J,L decision
+    class G1,G2,G3,G4,G6,G8,G10,G12,G15,G16,Z1,Z2,Z3 error
+    class G5,G7,G9,G11,G13,G14,G17,G18,G19,G20 warning
+    class H1,H2,H3,H4,H5,H6,H7,H8,K,M,N success

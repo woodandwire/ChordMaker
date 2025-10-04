@@ -1,0 +1,197 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="500"
+   height="500"
+   viewBox="0 0 500 500"
+   version="1.1"
+   id="svg5"
+   inkscape:version="1.2.2 (732a01da63, 2022-12-09)"
+   sodipodi:docname="drawing.svg"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview7"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="true"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="false"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:document-units="px"
+     showgrid="true"
+     inkscape:zoom="4"
+     inkscape:cx="126.25"
+     inkscape:cy="174"
+     inkscape:window-width="2880"
+     inkscape:window-height="1514"
+     inkscape:window-x="3829"
+     inkscape:window-y="-11"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="layer1">
+    <sodipodi:guide
+       position="0,500"
+       orientation="0,500"
+       id="guide1825"
+       inkscape:locked="false" />
+    <sodipodi:guide
+       position="500,500"
+       orientation="500,0"
+       id="guide1827"
+       inkscape:locked="false" />
+    <sodipodi:guide
+       position="500,0"
+       orientation="0,-500"
+       id="guide1829"
+       inkscape:locked="false" />
+    <sodipodi:guide
+       position="0,0"
+       orientation="-500,0"
+       id="guide1831"
+       inkscape:locked="false" />
+    <inkscape:grid
+       type="xygrid"
+       id="grid2561"
+       spacingx="5"
+       spacingy="5"
+       empcolor="#e50010"
+       empopacity="0.30196078" />
+  </sodipodi:namedview>
+  <defs
+     id="defs2">
+    <rect
+       x="-420"
+       y="0"
+       width="360"
+       height="485"
+       id="rect7433" />
+  </defs>
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1">
+    <rect
+       style="fill:none;stroke:#888a85;stroke-width:0.996678;stroke-dasharray:none"
+       id="rect5156"
+       width="299.00333"
+       height="299.00333"
+       x="24.498341"
+       y="34.498341" />
+    <rect
+       style="fill:none;stroke:#000000;stroke-width:0.995032;stroke-dasharray:none"
+       id="rect5314"
+       width="149.00497"
+       height="149.50497"
+       x="125.49751"
+       y="99.997513" />
+    <rect
+       style="fill:#000000;stroke:#000000;stroke-width:0.99683;stroke-dasharray:none"
+       id="rect5316"
+       width="149.00317"
+       height="10.00317"
+       x="125.49841"
+       y="89.498413" />
+    <circle
+       style="fill:#000000;stroke:none;stroke-width:1;stroke-dasharray:none"
+       id="path5478"
+       cx="150.5"
+       cy="137.5"
+       r="10.5" />
+    <circle
+       style="fill:#000000;stroke:#000000;stroke-width:0.714285;stroke-dasharray:none"
+       id="path5478-1"
+       cx="59.5"
+       cy="107.5"
+       r="7.5" />
+    <circle
+       style="fill:#000000;stroke:#000000;stroke-width:0.714285;stroke-dasharray:none"
+       id="path5478-1-7"
+       cx="59.5"
+       cy="143.5"
+       r="7.5" />
+    <circle
+       style="fill:#000000;stroke:#000000;stroke-width:0.714285;stroke-dasharray:none"
+       id="path5478-1-3"
+       cx="59.5"
+       cy="125.5"
+       r="7.5" />
+    <circle
+       style="fill:#000000;stroke:#000000;stroke-width:0.714285;stroke-dasharray:none"
+       id="path5478-1-5-8"
+       cx="60"
+       cy="161.5"
+       r="7.5" />
+    <circle
+       style="fill:none;stroke:#000000;stroke-width:0.714285;stroke-dasharray:none"
+       id="path5478-1-5-6-0"
+       cx="60"
+       cy="197.5"
+       r="7.5" />
+    <circle
+       style="fill:#000000;stroke:#000000;stroke-width:0.714285;stroke-dasharray:none"
+       id="path5478-1-5-2-0"
+       cx="60"
+       cy="179.5"
+       r="7.5" />
+    <path
+       style="fill:#000000;stroke:#000000;stroke-width:1;stroke-dasharray:none"
+       d="m 150.5,100 v 150 0 0"
+       id="path6269" />
+    <path
+       style="fill:#000000;stroke:#000000;stroke-width:1;stroke-dasharray:none"
+       d="m 175.5,100 v 150 0 0"
+       id="path6269-2" />
+    <path
+       style="fill:#000000;stroke:#000000;stroke-width:1;stroke-dasharray:none"
+       d="m 200.5,100 v 150 0 0"
+       id="path6269-2-1" />
+    <path
+       style="fill:#000000;stroke:#000000;stroke-width:1;stroke-dasharray:none"
+       d="m 225.5,100 v 150 0 0"
+       id="path6269-2-1-8" />
+    <path
+       style="fill:#000000;stroke:#000000;stroke-width:1;stroke-dasharray:none"
+       d="m 250.5,100 v 150 0 0"
+       id="path6269-2-1-8-3" />
+    <path
+       d="m 151.85305,130.431 v 14 h -2.25296 v -11.86244 l -2.28609,1.22283 v -2.03164 l 2.28609,-1.32875 z"
+       style="font-size:19.9977px;font-family:Bahnschrift;-inkscape-font-specification:Bahnschrift;fill:#ffffff;stroke-width:0.659967"
+       id="path7478" />
+    <path
+       d="m 126.00001,84 q -1.80823,0 -3.15852,-0.622641 -1.35031,-0.632075 -2.10175,-1.773585 Q 120,80.462264 120,78.943397 v -3.886794 q 0,-1.528302 0.73974,-2.660377 0.75144,-1.14151 2.10175,-1.764151 Q 124.19178,70 126.00001,70 q 1.80821,0 3.15851,0.632075 1.3503,0.622641 2.09003,1.764151 Q 132,73.528301 132,75.056603 v 3.886794 q 0,1.518867 -0.75145,2.660377 -0.73973,1.14151 -2.09003,1.773585 Q 127.80822,84 126.00001,84 Z m 0,-1.896226 q 1.6086,0 2.57142,-0.849057 0.97456,-0.849056 0.97456,-2.245284 v -4.018867 q 0,-1.40566 -0.97456,-2.245284 -0.96282,-0.849057 -2.57142,-0.849057 -1.59688,0 -2.57143,0.849057 -0.97457,0.839624 -0.97457,2.245284 v 4.018867 q 0,1.396228 0.97457,2.245284 0.97455,0.849057 2.57143,0.849057 z"
+       style="font-size:23.9641px;font-family:Bahnschrift;-inkscape-font-specification:Bahnschrift;stroke-width:0.673584"
+       id="path7471" />
+    <path
+       d="M 178.55081,84 174.50803,77.847318 174.17647,77.365887 169.12834,70 h 2.4492 l 3.75402,5.700137 0.35293,0.519945 L 181,84 Z M 169,84 174.41177,75.998624 178.31551,70 h 2.4492 L 175.62032,77.577717 171.4492,84 Z"
+       style="font-size:23.9641px;font-family:Bahnschrift;-inkscape-font-specification:Bahnschrift;stroke-width:0.649464"
+       id="path7473" />
+    <text
+       xml:space="preserve"
+       id="text7431"
+       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:96px;font-family:Bahnschrift;-inkscape-font-specification:Bahnschrift;white-space:pre;shape-inside:url(#rect7433);display:inline;fill:#000000;stroke:none;stroke-width:3" />
+    <path
+       style="fill:#000000;stroke:#000000;stroke-width:1;stroke-dasharray:none"
+       d="M 125,125 H 275"
+       id="path7639" />
+    <path
+       style="fill:#000000;stroke:#000000;stroke-width:1;stroke-dasharray:none"
+       d="m 125,150 h 150 v 0"
+       id="path7641" />
+    <path
+       style="fill:#000000;stroke:#000000;stroke-width:1;stroke-dasharray:none"
+       d="M 125,175 H 275"
+       id="path7643" />
+    <path
+       style="fill:#000000;stroke:#000000;stroke-width:1;stroke-dasharray:none"
+       d="M 125,200 H 275"
+       id="path7645" />
+    <path
+       style="fill:#000000;stroke:#000000;stroke-width:1;stroke-dasharray:none"
+       d="M 125,225 H 275"
+       id="path7647" />
+  </g>
+</svg>

@@ -101,11 +101,9 @@ ehthumbs.db
 Desktop.ini
 
 # Project specific files
-*.svg
-!example_chord.svg
-chord_files/
-output/
+generated/
 temp/
+test_output/
 
 # Log files
 *.log
