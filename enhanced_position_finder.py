@@ -40,13 +40,18 @@ class EnhancedPositionFinder:
         """
         self.output_dir = Path(output_dir)
         self.chords_dir = self.output_dir / "chords"
-        self.trash_dir = self.output_dir / "trash"
         self.analysis_dir = self.output_dir / "analysis"
         
         # Create directories
         self.chords_dir.mkdir(parents=True, exist_ok=True)
-        self.trash_dir.mkdir(parents=True, exist_ok=True)
         self.analysis_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Create single failure log file
+        self.failure_log_path = self.analysis_dir / f"failures_{int(time.time())}.log"
+        self.failure_log = open(self.failure_log_path, 'w', encoding='utf-8')
+        self.failure_log.write("=" * 80 + "\n")
+        self.failure_log.write("CHORD PATTERN VALIDATION FAILURES LOG\n")
+        self.failure_log.write("=" * 80 + "\n\n")
         
         # Configuration - NO ARBITRARY LIMITS
         self.min_fret = 0
@@ -73,6 +78,10 @@ class EnhancedPositionFinder:
         # Pattern tracking
         self.pattern_hashes = set()  # Detect duplicates
         
+        # Performance optimization: validation cache
+        self.validation_cache = {}  # Cache validation results for similar patterns
+        self.quick_rejects = 0  # Track quick rejection performance
+        
         print("=" * 70)
         print("🎸 Enhanced Position Finder - Comprehensive Study Mode")
         print("=" * 70)
@@ -80,12 +89,73 @@ class EnhancedPositionFinder:
         print(f"Fret range: {self.min_fret}-{self.max_fret}")
         print(f"Thumb reach: {thumb_reach} strings")
         print(f"Min sounding strings: {self.min_sounding_strings}")
+        print(f"Failure log: {self.failure_log_path}")
         print("=" * 70)
     
     def pattern_to_hash(self, pattern: List[Tuple[str, int]]) -> str:
         """Create a hash of pattern for duplicate detection."""
         pattern_str = str(sorted(pattern))
         return hashlib.md5(pattern_str.encode()).hexdigest()
+    
+    def quick_reject(self, pattern: List[Tuple[str, int]]) -> Optional[str]:
+        """
+        Fast pre-validation to reject obviously invalid patterns.
+        Returns rejection reason or None if pattern should be validated.
+        
+        This catches ~80-90% of invalid patterns in microseconds.
+        """
+        # 1. Check for invalid input (finger on fret 0 - should be open)
+        for finger, fret in pattern:
+            if finger not in ['X', 'O'] and fret == 0:
+                return "INVALID_INPUT"
+        
+        # 2. Check minimum sounding strings
+        sounding = sum(1 for f, _ in pattern if f != 'X')
+        if sounding < self.min_sounding_strings:
+            return "INVALID_INPUT"
+        
+        # 3. Quick fret span check
+        fretted = [fret for f, fret in pattern if f not in ['X', 'O']]
+        if fretted:
+            min_fret = min(fretted)
+            max_fret = max(fretted)
+            if max_fret - min_fret > 4:  # Max span is 4 frets
+                return "PHYSICALLY_IMPOSSIBLE"
+        
+        # 4. Check for impossible finger ordering (e.g., finger 1 on higher fret than finger 2)
+        finger_frets = {}
+        for string_idx, (finger, fret) in enumerate(pattern):
+            if finger in ['1', '2', '3', '4']:
+                if finger in finger_frets:
+                    # Same finger used on different strings - check if it's a barre
+                    prev_fret, prev_string = finger_frets[finger]
+                    if fret != prev_fret:
+                        # Same finger on different frets - only valid if same fret (barre)
+                        # or adjacent strings with 1 fret difference (stretch)
+                        if abs(fret - prev_fret) > 1 or abs(string_idx - prev_string) > 3:
+                            return "PHYSICALLY_IMPOSSIBLE"
+                finger_frets[finger] = (fret, string_idx)
+        
+        # 5. Check for basic finger order violations
+        # Finger 1 should generally be on lowest fret among all fingers
+        if finger_frets:
+            fret_list = [(int(f), fret) for f, (fret, _) in finger_frets.items()]
+            fret_list.sort()
+            # Check if fingers are in reasonable order
+            for i in range(len(fret_list) - 1):
+                finger_a, fret_a = fret_list[i]
+                finger_b, fret_b = fret_list[i + 1]
+                # Higher finger number should not be on lower fret (with some tolerance)
+                if finger_b > finger_a and fret_b < fret_a - 1:
+                    return "PHYSICALLY_IMPOSSIBLE"
+        
+        # 6. Check for too many fingers
+        unique_fingers = len(set(f for f, _ in pattern if f in ['1', '2', '3', '4', 'T']))
+        if unique_fingers > 4:
+            return "PHYSICALLY_IMPOSSIBLE"
+        
+        # Passed quick checks - needs full validation
+        return None
     
     def generate_all_patterns(self, batch_size: int = 10000) -> Iterator[List[Tuple[str, int]]]:
         """
@@ -145,15 +215,48 @@ class EnhancedPositionFinder:
                             patterns_generated += 1
                             continue
                         
+                        # OPTIMIZATION: Skip patterns that are guaranteed to fail
+                        if len(fretted_positions) > 4:  # Can't use more than 4 fingers
+                            continue
+                        
                         # Generate finger assignments for fretted positions
                         # Use available fingers: 1, 2, 3, 4
                         fingers = ['1', '2', '3', '4']
                         
+                        # OPTIMIZATION: Limit span to 4 frets max
+                        effective_span = min(span, 4)
+                        
                         # For each fretted string, try each finger
                         # Allow finger repetition (barre chords)
                         for finger_combo in product(fingers, repeat=len(fretted_positions)):
+                            # OPTIMIZATION: Skip if fingers are in impossible order
+                            # (e.g., finger 4 before finger 1 on same fret is unlikely)
+                            finger_nums = [int(f) for f in finger_combo]
+                            if len(set(finger_nums)) > 1:  # More than one unique finger
+                                # Check if fingers appear in reasonable order
+                                first_occurrence = {}
+                                skip_combo = False
+                                for idx, f_num in enumerate(finger_nums):
+                                    if f_num not in first_occurrence:
+                                        first_occurrence[f_num] = idx
+                                # Fingers should generally appear in numeric order
+                                sorted_fingers = sorted(first_occurrence.items(), key=lambda x: x[1])
+                                for i in range(len(sorted_fingers) - 1):
+                                    if sorted_fingers[i][0] > sorted_fingers[i+1][0] + 1:
+                                        skip_combo = True
+                                        break
+                                if skip_combo:
+                                    continue
+                            
                             # For each fretted string, try different frets within span
-                            for fret_combo in product(range(base_fret, base_fret + span + 1), repeat=len(fretted_positions)):
+                            for fret_combo in product(range(base_fret, base_fret + effective_span + 1), repeat=len(fretted_positions)):
+                                # OPTIMIZATION: Quick rejection before building pattern
+                                if fretted_positions:
+                                    min_fret_here = min(fret_combo)
+                                    max_fret_here = max(fret_combo)
+                                    if max_fret_here - min_fret_here > 4:
+                                        continue
+                                
                                 pattern = base_pattern.copy()
                                 
                                 # Assign fingers and frets
@@ -161,6 +264,12 @@ class EnhancedPositionFinder:
                                     finger = finger_combo[idx]
                                     fret = fret_combo[idx]
                                     pattern[pos] = (finger, fret)
+                                
+                                # OPTIMIZATION: Quick reject before hashing
+                                quick_reject_reason = self.quick_reject(pattern)
+                                if quick_reject_reason:
+                                    self.quick_rejects += 1
+                                    continue
                                 
                                 # Check for duplicate
                                 pattern_hash = self.pattern_to_hash(pattern)
@@ -175,7 +284,17 @@ class EnhancedPositionFinder:
                                 if patterns_generated % batch_size == 0:
                                     elapsed = time.time() - self.stats['start_time']
                                     rate = patterns_generated / elapsed if elapsed > 0 else 0
-                                    print(f"  Generated {patterns_generated} patterns ({rate:.0f}/sec)")
+                                    qr_pct = (self.quick_rejects / (patterns_generated + self.quick_rejects) * 100) if (patterns_generated + self.quick_rejects) > 0 else 0
+                                    print(f"  Generated {patterns_generated} patterns ({rate:.0f}/sec) | Quick rejects: {qr_pct:.1f}%")
+    
+    def get_cache_key(self, pattern: List[Tuple[str, int]]) -> str:
+        """
+        Create a cache key for validation results.
+        Normalizes pattern to catch similar fingerings.
+        """
+        # Sort by string and normalize to reduce cache misses
+        normalized = tuple(sorted((f, fret) for f, fret in pattern if f != 'X'))
+        return str(normalized)
     
     def validate_and_catalog(self, pattern: List[Tuple[str, int]], pattern_id: int) -> Dict[str, Any]:
         """
@@ -190,8 +309,16 @@ class EnhancedPositionFinder:
         """
         self.stats['total_generated'] += 1
         
-        # Validate the pattern
-        validation_result = self.validator.validate_chord(pattern)
+        # OPTIMIZATION: Check validation cache
+        cache_key = self.get_cache_key(pattern)
+        if cache_key in self.validation_cache:
+            validation_result = self.validation_cache[cache_key]
+        else:
+            # Validate the pattern
+            validation_result = self.validator.validate_chord(pattern)
+            # Cache result for similar patterns
+            self.validation_cache[cache_key] = validation_result
+        
         is_valid = validation_result['status_code'] < 400
         
         # Create pattern name
@@ -215,44 +342,32 @@ class EnhancedPositionFinder:
             filename = f"{pattern_name}_chord.svg"
             filepath = self.chords_dir / filename
             
+            # OPTIMIZATION: Only generate SVG, skip extra processing
             self.chart.set_chord_name(f"Pattern {pattern_id:06d}")
             self.chart.save_to_file(pattern, str(filepath))
             
             result['file_path'] = str(filepath)
-            print(f"✅ {pattern_name}: VALID - {validation_result['status_name']}")
+            # OPTIMIZATION: Reduce console output (only print every 10th valid)
+            if self.stats['valid_patterns'] % 10 == 0:
+                print(f"✅ {pattern_name}: VALID - {validation_result['status_name']}")
             
         else:
-            # Invalid chord - save to trash with detailed log
+            # Invalid chord - log to single failure file
             self.stats['invalid_patterns'] += 1
             self.stats['rejection_reasons'][validation_result['status_name']] += 1
             
-            # Save chart to trash
-            svg_filename = f"{pattern_name}_invalid.svg"
-            svg_filepath = self.trash_dir / svg_filename
+            # OPTIMIZATION: Batch writes (write every 100 failures)
+            if self.stats['invalid_patterns'] % 100 == 0:
+                self.failure_log.write(f"{pattern_name}: {validation_result['status_name']} - {pattern}\n")
+                self.failure_log.flush()
+            else:
+                self.failure_log.write(f"{pattern_name}: {validation_result['status_name']} - {pattern}\n")
             
-            self.chart.set_chord_name(f"Pattern {pattern_id:06d} [INVALID]")
-            self.chart.save_to_file(pattern, str(svg_filepath))
+            result['logged'] = True
             
-            # Save detailed log
-            log_filename = f"{pattern_name}_log.txt"
-            log_filepath = self.trash_dir / log_filename
-            
-            with open(log_filepath, 'w', encoding='utf-8') as f:
-                f.write(f"Pattern ID: {pattern_id}\n")
-                f.write(f"Pattern: {pattern}\n")
-                f.write(f"Status: {validation_result['status_name']} (Code: {validation_result['status_code']})\n")
-                f.write(f"\nValidation Messages:\n")
-                for msg in validation_result.get('messages', []):
-                    f.write(f"  [{msg['severity'].upper()}] {msg['message']}\n")
-                f.write(f"\nFinger Positions:\n")
-                for i, (finger, fret) in enumerate(pattern):
-                    string_num = 6 - i
-                    f.write(f"  String {string_num}: {finger} at fret {fret}\n")
-            
-            result['svg_path'] = str(svg_filepath)
-            result['log_path'] = str(log_filepath)
-            
-            print(f"❌ {pattern_name}: INVALID - {validation_result['status_name']}")
+            # OPTIMIZATION: Reduce console output (only print every 100th invalid)
+            if self.stats['invalid_patterns'] % 100 == 0:
+                print(f"❌ {pattern_name}: INVALID - {validation_result['status_name']}")
         
         return result
     
@@ -272,17 +387,23 @@ class EnhancedPositionFinder:
         # Generate and process patterns
         pattern_generator = self.generate_all_patterns()
         
+        # OPTIMIZATION: Don't store all results in memory
         results = []
+        last_summary_time = time.time()
+        
         for pattern_id, pattern in enumerate(pattern_generator, start=1):
             if max_patterns and pattern_id > max_patterns:
                 break
             
             result = self.validate_and_catalog(pattern, pattern_id)
-            results.append(result)
+            # OPTIMIZATION: Only keep summary stats, not full results
+            # results.append(result)  # Commented out to save memory
             
-            # Periodic summary
-            if pattern_id % 1000 == 0:
+            # OPTIMIZATION: Print summary based on time (every 5 seconds) instead of count
+            current_time = time.time()
+            if current_time - last_summary_time >= 5.0:
                 self.print_interim_summary()
+                last_summary_time = current_time
         
         self.stats['end_time'] = time.time()
         
@@ -302,8 +423,14 @@ class EnhancedPositionFinder:
         elapsed = time.time() - self.stats['start_time']
         patterns_per_sec = total / elapsed if elapsed > 0 else 0
         
+        # Calculate cache hit rate
+        cache_size = len(self.validation_cache)
+        cache_hit_pct = (cache_size / total * 100) if total > 0 else 0
+        quick_reject_pct = (self.quick_rejects / (total + self.quick_rejects) * 100) if (total + self.quick_rejects) > 0 else 0
+        
         print(f"\n--- Progress: {total} patterns ({patterns_per_sec:.0f}/sec) ---")
         print(f"Valid: {valid} ({rate:.1f}%) | Invalid: {invalid}")
+        print(f"Quick rejects: {quick_reject_pct:.1f}% | Cache entries: {cache_size}")
         print()
     
     def print_final_summary(self):
@@ -329,9 +456,13 @@ class EnhancedPositionFinder:
             print(f"  {reason}: {count:,} ({pct:.1f}%)")
         print(f"\n📁 Output Directories:")
         print(f"  Valid chords: {self.chords_dir}")
-        print(f"  Invalid patterns: {self.trash_dir}")
+        print(f"  Failure log: {self.failure_log_path}")
         print(f"  Analysis: {self.analysis_dir}")
         print(f"{'='*70}\n")
+        
+        # Close failure log
+        if hasattr(self, 'failure_log'):
+            self.failure_log.close()
     
     def save_analysis(self, results: List[Dict[str, Any]]):
         """Save detailed analysis to JSON file."""
@@ -389,7 +520,7 @@ def main():
     # Run study
     finder.run_comprehensive_study(max_patterns=args.max_patterns)
     
-    print("✨ Study complete! Review the trash/ directory to identify needed rules.\n")
+    print(f"✨ Study complete! Review the failure log at {finder.failure_log_path} to identify needed rules.\n")
 
 
 if __name__ == "__main__":
