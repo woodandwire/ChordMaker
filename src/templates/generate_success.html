@@ -14,8 +14,11 @@
 
 <div class="chord-container">
     <h2>{{ chord_name }}</h2>
-    <img src="/svg/{{ safe_name }}" alt="{{ chord_name }} Chord" width="220" height="230" style="border: 1px solid #ddd;">
-    <br><small>Direct SVG: <a href="/svg/{{ safe_name }}" target="_blank">View</a></small>
+    <a href="/chord/{{ safe_name }}" target="_blank">
+        <img src="/svg/{{ filename }}" alt="{{ chord_name }} Chord" width="220" height="230" style="border: 1px solid #ddd; cursor: pointer;">
+    </a>
+    <br><small>Direct SVG: <a href="/svg/{{ filename }}" target="_blank">View</a> | 
+    <a href="/chord/{{ safe_name }}" target="_blank">Page</a></small>
 </div>
 
 <p><strong>File saved as:</strong> {{ filename }}</p>

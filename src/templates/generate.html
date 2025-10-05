@@ -1,7 +1,6 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h1>🎸 Generate Chord Chart</h1>
 
 <div class="form-container">
     <form method="post" action="/generate">
@@ -16,26 +15,154 @@
         </div>
 
         <div class="form-group">
-            <label>Chord Pattern (String 6 to String 1):</label>
+            <label>Chord Configuration (String 6 to String 1):</label>
             <small style="color: #666; display: block; margin-bottom: 10px;">
-                Enter fret numbers (0-24), 'X' for muted, or 'O' for open strings
+                Select finger type and fret number for each string
             </small>
-            <div class="chord-input-grid">
-                {% for i in range(6) %}
-                <div class="chord-input-cell">
-                    <label>String {{ 6 - i }}</label>
-                    <input type="text" name="string_{{ 6 - i }}" 
-                           placeholder="0-24/X/O" 
-                           value="{{ chord_pattern[i] if chord_pattern and i < chord_pattern|length else '' }}" 
-                           maxlength="3">
-                </div>
-                {% endfor %}
+            
+            {% for i in range(6) %}
+            <div class="string-input">
+                <label>String {{ 6 - i }}:</label>
+                <select name="string_{{ 6 - i }}_type" class="string-type-selector">
+                    <option value="X">X (Muted)</option>
+                    <option value="O">O (Open)</option>
+                    <option value="1">1 (1st finger)</option>
+                    <option value="2">2 (2nd finger)</option>
+                    <option value="3">3 (3rd finger)</option>
+                    <option value="4">4 (4th finger)</option>
+                    <option value="T">T (Thumb)</option>
+                </select>
+                <input type="number" name="string_{{ 6 - i }}_fret" min="0" max="24" value="0" placeholder="Fret" class="fret-input">
             </div>
+            {% endfor %}
+        </div>
+
+        <div class="form-group">
+            <label for="thumb_reach">Thumb Reach:</label>
+            <select name="thumb_reach" id="thumb_reach">
+                <option value="0">No thumb fretting</option>
+                <option value="1" selected>6th string only (standard)</option>
+                <option value="2">6th & 5th strings (extended)</option>
+                <option value="3">6th, 5th & 4th strings (large hands)</option>
+                <option value="4">Up to 3rd string (very large hands)</option>
+                <option value="5">Up to 2nd string (exceptional)</option>
+                <option value="6">All strings (rare)</option>
+            </select>
         </div>
 
         <button type="submit" class="submit-btn">🎸 Generate Chord Chart</button>
+        <button type="button" class="validate-btn" onclick="validateChord()">🔍 Validate Fingering</button>
+        
+        <div id="validation-result" style="display: none;"></div>
     </form>
 </div>
+
+<script>
+// Initialize fret input states when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    // Add event listeners to all string type selectors
+    for (let i = 1; i <= 6; i++) {
+        const selector = document.querySelector(`select[name="string_${i}_type"]`);
+        const fretInput = document.querySelector(`input[name="string_${i}_fret"]`);
+        
+        // Set initial state
+        updateFretInput(selector, fretInput);
+        
+        // Add change listener
+        selector.addEventListener('change', function() {
+            updateFretInput(selector, fretInput);
+        });
+    }
+});
+
+function updateFretInput(selector, fretInput) {
+    const selectedValue = selector.value;
+    
+    if (selectedValue === 'X') {
+        // Muted string - make readonly and set to 0
+        fretInput.readOnly = true;
+        fretInput.value = '0';
+        fretInput.placeholder = 'Muted';
+        fretInput.style.backgroundColor = '#f8f9fa';
+        fretInput.style.color = '#6c757d';
+        fretInput.style.cursor = 'not-allowed';
+    } else if (selectedValue === 'O') {
+        // Open string - make readonly and set to 0
+        fretInput.readOnly = true;
+        fretInput.value = '0';
+        fretInput.placeholder = 'Open (0)';
+        fretInput.style.backgroundColor = '#f8f9fa';
+        fretInput.style.color = '#6c757d';
+        fretInput.style.cursor = 'not-allowed';
+    } else {
+        // Finger or thumb - enable input
+        fretInput.readOnly = false;
+        fretInput.placeholder = 'Fret';
+        fretInput.style.backgroundColor = '';
+        fretInput.style.color = '';
+        fretInput.style.cursor = '';
+        if (fretInput.value === '0' && (selectedValue !== 'O' && selectedValue !== 'X')) {
+            fretInput.value = '1'; // Default to fret 1 for fingers
+        }
+    }
+}
+
+async function validateChord() {
+    const formData = new FormData();
+    
+    // Collect chord data
+    for (let i = 1; i <= 6; i++) {
+        const type = document.querySelector(`select[name="string_${i}_type"]`).value;
+        const fret = document.querySelector(`input[name="string_${i}_fret"]`).value;
+        formData.append(`string_${i}_type`, type);
+        formData.append(`string_${i}_fret`, fret);
+    }
+    
+    // Add thumb reach setting
+    const thumbReach = document.querySelector(`select[name="thumb_reach"]`).value;
+    formData.append('thumb_reach', thumbReach);
+    
+    try {
+        const response = await fetch('/validate-chord', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const result = await response.json();
+        const resultDiv = document.getElementById('validation-result');
+        
+        if (result.valid) {
+            resultDiv.innerHTML = `
+                <div style="color: green; padding: 10px; background: #d4edda; border: 1px solid #c3e6cb; border-radius: 4px; margin-top: 10px;">
+                    ✅ <strong>Valid fingering!</strong><br>
+                    Difficulty: ${result.difficulty}/10<br>
+                    ${result.notes ? 'Notes: ' + result.notes : ''}
+                </div>
+            `;
+        } else {
+            resultDiv.innerHTML = `
+                <div style="color: red; padding: 10px; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 4px; margin-top: 10px;">
+                    ❌ <strong>Invalid fingering</strong><br>
+                    ${result.issues && result.issues.length > 0 ? 'Issues: ' + result.issues.join(', ') + '<br>' : ''}
+                    ${result.suggestions && result.suggestions.length > 0 ? 'Suggestions: ' + result.suggestions.join(', ') : ''}
+                    ${result.error ? 'Error: ' + result.error : ''}
+                </div>
+            `;
+        }
+        
+        resultDiv.style.display = 'block';
+    } catch (error) {
+        console.error('Validation error:', error);
+        const resultDiv = document.getElementById('validation-result');
+        resultDiv.innerHTML = `
+            <div style="color: red; padding: 10px; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 4px; margin-top: 10px;">
+                ❌ Error validating chord. Please try again.
+            </div>
+        `;
+        resultDiv.style.display = 'block';
+    }
+}
+</script>
 
 <div class="info">
     <h3>📝 How to use:</h3>

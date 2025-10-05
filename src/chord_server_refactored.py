@@ -25,7 +25,9 @@ from utils.pagination import generate_pagination_html, calculate_pagination
 app = FastAPI(title="Chord Chart Viewer", description="Guitar chord chart viewer with SVG support")
 
 # Get the current directory
-current_dir = Path(__file__).parent
+current_dir = Path(__file__).parent  # This is src directory
+project_root = current_dir.parent    # This is the project root
+chord_dir = project_root / "chords"  # Chords are in project root
 
 # Setup templates and static files
 templates = Jinja2Templates(directory=str(current_dir / "templates"))
@@ -41,7 +43,7 @@ class SVGStaticFiles(StaticFiles):
         return response
 
 # Mount chord files directory
-app.mount("/svg", SVGStaticFiles(directory=str(current_dir / "chords")), name="chords")
+app.mount("/svg", SVGStaticFiles(directory=str(chord_dir)), name="chords")
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -54,7 +56,7 @@ async def home(
     """Serve the main chord viewer page with pagination and search."""
     
     # Discover all chord files
-    all_chord_files = discover_chord_files(current_dir)
+    all_chord_files = discover_chord_files(project_root)
     
     # Apply search filter if provided
     if search.strip():
@@ -86,11 +88,15 @@ async def home(
     # Generate chord containers for current page
     chord_containers = ""
     for chord in chord_files:
+        # Use the original file path to get the correct filename with _chord.svg
+        svg_filename = chord["file_path"].name  # This includes _chord.svg
         chord_containers += f'''
         <div class="chord-container">
             <h2>{chord["display_name"]}</h2>
-            <img src="/svg/{chord["filename"]}_chord.svg" alt="{chord["display_name"]} Chord" width="220" height="230" style="border: 1px solid #ddd;">
-            <br><small>Direct SVG: <a href="/svg/{chord["filename"]}_chord.svg" target="_blank">View</a> | 
+            <a href="/chord/{chord["filename"]}" target="_blank">
+                <img src="/svg/{svg_filename}" alt="{chord["display_name"]} Chord" width="220" height="230" style="border: 1px solid #ddd; cursor: pointer;">
+            </a>
+            <br><small>Direct SVG: <a href="/svg/{svg_filename}" target="_blank">View</a> | 
             <a href="/chord/{chord["filename"]}" target="_blank">Page</a></small>
             <br><button onclick="deleteChord('{chord["filename"]}')" class="delete-btn">🗑️ Delete</button>
         </div>
@@ -111,7 +117,7 @@ async def home(
 @app.get("/api/chords")
 async def api_chords():
     """API endpoint to list all available chords."""
-    chord_files = discover_chord_files(current_dir)
+    chord_files = discover_chord_files(project_root)
     return {
         "chords": [
             {
@@ -137,6 +143,83 @@ async def api_validate(chord_data: list):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@app.post("/validate-chord")
+async def validate_chord_form(
+    string_6_type: str = Form(...),
+    string_6_fret: int = Form(...),
+    string_5_type: str = Form(...),
+    string_5_fret: int = Form(...),
+    string_4_type: str = Form(...),
+    string_4_fret: int = Form(...),
+    string_3_type: str = Form(...),
+    string_3_fret: int = Form(...),
+    string_2_type: str = Form(...),
+    string_2_fret: int = Form(...),
+    string_1_type: str = Form(...),
+    string_1_fret: int = Form(...),
+    thumb_reach: int = Form(1)
+):
+    """Validate chord fingering from form data."""
+    try:
+        # Collect finger types and fret positions
+        string_types = [string_6_type, string_5_type, string_4_type, string_3_type, string_2_type, string_1_type]
+        string_frets = [string_6_fret, string_5_fret, string_4_fret, string_3_fret, string_2_fret, string_1_fret]
+        
+        # Build chord pattern for validator (finger_indicator, fret_number)
+        chord_pattern = []
+        for finger_type, fret in zip(string_types, string_frets):
+            finger_type = finger_type.strip().upper()
+            
+            # For muted (X) and open (O) strings, fret should be 0
+            if finger_type in ['X', 'O'] and fret != 0:
+                fret = 0
+            
+            chord_pattern.append((finger_type, fret))
+        
+        validator = ChordFingeringValidator(thumb_reach_strings=thumb_reach)
+        result = validator.validate_chord(chord_pattern)
+        
+        # Extract basic validity from status code (2xx = valid, 4xx+ = invalid)
+        status_code = result.get("status_code", 500)
+        is_valid = status_code < 400
+        
+        # Convert validator result format to expected JavaScript format
+        response = {
+            "valid": is_valid,
+            "difficulty": min(10, max(1, (status_code - 200) // 20 + 1)),  # Convert status to 1-10 scale
+            "notes": "",
+            "issues": [],
+            "suggestions": []
+        }
+        
+        # Extract issues and suggestions from messages
+        messages = result.get("messages", [])
+        for msg in messages:
+            if msg.get("severity") == "error":
+                response["issues"].append(msg.get("message", "Unknown error"))
+            elif msg.get("severity") == "warning":
+                response["suggestions"].append(msg.get("message", "Unknown warning"))
+            elif msg.get("severity") == "info":
+                response["notes"] += msg.get("message", "") + " "
+        
+        # Clean up notes and provide default message if no specific issues
+        response["notes"] = response["notes"].strip()
+        if not response["valid"] and not response["issues"] and not response["suggestions"]:
+            response["issues"].append("Chord fingering appears to be invalid")
+        
+        return response
+        
+    except Exception as e:
+        return {
+            "valid": False, 
+            "error": str(e), 
+            "issues": [f"Validation error: {str(e)}"], 
+            "suggestions": [],
+            "difficulty": 10,
+            "notes": ""
+        }
+
+
 @app.get("/svg/{chord_name}")
 async def get_svg(chord_name: str):
     """Serve SVG files directly."""
@@ -146,7 +229,7 @@ async def get_svg(chord_name: str):
     if not chord_name.endswith('_chord.svg') and not chord_name.replace('.svg', '').endswith('_chord'):
         chord_name = chord_name.replace('.svg', '_chord.svg')
     
-    svg_path = current_dir / "chords" / chord_name
+    svg_path = chord_dir / chord_name
     
     if not svg_path.exists():
         raise HTTPException(status_code=404, detail="Chord SVG not found")
@@ -164,7 +247,7 @@ async def chord_detail(request: Request, chord_name: str):
     
     # Construct the SVG filename
     svg_filename = f"{chord_name}_chord.svg"
-    svg_path = current_dir / "chords" / svg_filename
+    svg_path = chord_dir / svg_filename
     
     if not svg_path.exists():
         raise HTTPException(status_code=404, detail="Chord not found")
@@ -183,7 +266,7 @@ async def chord_detail(request: Request, chord_name: str):
         "request": request,
         "title": f"{display_name} Chord",
         "chord_name": display_name,
-        "filename": chord_name,
+        "filename": svg_filename,  # Use the full filename with _chord.svg
         "chord_data_display": chord_data_display
     })
 
@@ -192,7 +275,7 @@ async def chord_detail(request: Request, chord_name: str):
 async def delete_chord(chord_name: str):
     """Delete a chord SVG file."""
     svg_filename = f"{chord_name}_chord.svg"
-    svg_path = current_dir / "chords" / svg_filename
+    svg_path = chord_dir / svg_filename
     
     if not svg_path.exists():
         raise HTTPException(status_code=404, detail="Chord not found")
@@ -219,44 +302,48 @@ async def generate_form(request: Request):
 async def generate_chord(
     request: Request,
     chord_name: str = Form(...),
-    string_6: str = Form(...),
-    string_5: str = Form(...), 
-    string_4: str = Form(...),
-    string_3: str = Form(...),
-    string_2: str = Form(...),
-    string_1: str = Form(...)
+    string_6_type: str = Form(...),
+    string_6_fret: int = Form(...),
+    string_5_type: str = Form(...),
+    string_5_fret: int = Form(...),
+    string_4_type: str = Form(...),
+    string_4_fret: int = Form(...),
+    string_3_type: str = Form(...),
+    string_3_fret: int = Form(...),
+    string_2_type: str = Form(...),
+    string_2_fret: int = Form(...),
+    string_1_type: str = Form(...),
+    string_1_fret: int = Form(...),
+    thumb_reach: int = Form(1)
 ):
-    """Process chord generation form submission."""
+    """Process chord generation form submission with finger types and fret positions."""
     
-    # Collect chord pattern from form
-    chord_pattern_raw = [string_6, string_5, string_4, string_3, string_2, string_1]
+    # Collect finger types and fret positions
+    string_types = [string_6_type, string_5_type, string_4_type, string_3_type, string_2_type, string_1_type]
+    string_frets = [string_6_fret, string_5_fret, string_4_fret, string_3_fret, string_2_fret, string_1_fret]
     
-    # Process and validate chord pattern
+    # Build chord pattern for validator (finger_indicator, fret_number)
     chord_pattern = []
-    for i, string_val in enumerate(chord_pattern_raw):
-        string_val = string_val.strip().upper()
+    for i, (finger_type, fret) in enumerate(zip(string_types, string_frets)):
+        finger_type = finger_type.strip().upper()
         
-        if string_val == 'X':
-            chord_pattern.append(('X', 0))
-        elif string_val == 'O':
-            chord_pattern.append(('O', 0))
-        else:
-            try:
-                fret = int(string_val)
-                if fret < 0 or fret > 24:
-                    raise ValueError(f"Fret {fret} out of range (0-24)")
-                chord_pattern.append((fret, fret))
-            except ValueError:
-                return templates.TemplateResponse("generate.html", {
-                    "request": request,
-                    "title": "Generate Chord Chart - Error",
-                    "chord_name": chord_name,
-                    "chord_pattern": chord_pattern_raw,
-                    "error": f"Invalid value '{string_val}' for string {6-i}. Use 0-24, X, or O."
-                })
+        # Validate fret range
+        if fret < 0 or fret > 24:
+            return templates.TemplateResponse("generate.html", {
+                "request": request,
+                "title": "Generate Chord Chart - Error",
+                "chord_name": chord_name,
+                "error": f"Fret {fret} out of range (0-24) for string {6-i}"
+            })
+        
+        # For muted (X) and open (O) strings, fret should be 0
+        if finger_type in ['X', 'O'] and fret != 0:
+            fret = 0
+        
+        chord_pattern.append((finger_type, fret))
     
     # Validate the chord pattern
-    validator = ChordFingeringValidator()
+    validator = ChordFingeringValidator(thumb_reach_strings=thumb_reach)
     validation_result = validator.validate_chord(chord_pattern)
     
     # Generate chord chart
@@ -265,10 +352,10 @@ async def generate_chord(
         
         safe_name = sanitize_chord_name(chord_name)
         filename = f"{safe_name}_chord.svg"
-        filepath = current_dir / "chords" / filename
+        filepath = chord_dir / filename
         
         # Ensure chords directory exists
-        os.makedirs(current_dir / "chords", exist_ok=True)
+        os.makedirs(chord_dir, exist_ok=True)
         
         # Generate the SVG using ChordChart class
         chart = ChordChart()
@@ -302,11 +389,10 @@ async def generate_chord(
             "request": request,
             "title": "Generate Chord Chart - Error",
             "chord_name": chord_name,
-            "chord_pattern": chord_pattern_raw,
             "error": f"Error generating chord: {str(e)}"
         })
 
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    uvicorn.run(app, host="127.0.0.1", port=8002)

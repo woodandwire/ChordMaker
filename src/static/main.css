@@ -304,6 +304,54 @@ h2 {
     font-size: 14px;
 }
 
+/* String input styles for finger selection */
+.string-input {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+    gap: 10px;
+}
+
+.string-input label {
+    min-width: 80px;
+    font-weight: bold;
+    color: #333;
+}
+
+.string-type-selector {
+    min-width: 150px;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background-color: white;
+    font-size: 14px;
+}
+
+.fret-input {
+    width: 80px;
+    padding: 8px;
+    text-align: center;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.validate-btn {
+    background-color: #28a745;
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 16px;
+    margin-left: 10px;
+    transition: background-color 0.3s;
+}
+
+.validate-btn:hover {
+    background-color: #218838;
+}
+
 .submit-btn {
     background-color: #007bff;
     color: white;
